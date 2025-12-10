@@ -1,15 +1,36 @@
-import { Text, View, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors } from "../assets/colors/colors";
 
 export default function Index() {
   return (
-    <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: "#64a5e1ff", alignItems: "center" }}>
+    <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: colors.background, alignItems: "center" }}>
 
-      <Text style={{ fontSize: 32, fontWeight: "bold"}}>LockdIn 🔒</Text>
-      <Text style={{ fontSize: 22, marginTop: 10 }}>Tasks</Text>
+      <Text style={{ fontSize: 32, fontWeight: "bold", color: colors.textPrimary}}>LockdIn</Text>
+      <Text style={{ fontSize: 22, marginTop: 10, color: colors.textMuted }}>Tasks</Text>
 
-      <TouchableOpacity /* styles */>
-        <Text style={{ fontSize: 22, marginTop: 10 }}>+</Text>
+      <TouchableOpacity style={{
+          marginTop: 30,
+          height: 160,
+          width: 300,
+          borderWidth: 2,
+          borderColor: colors.border,
+          borderRadius: 20,
+          borderStyle: "dashed",
+          backgroundColor: colors.card,
+          justifyContent: "center",
+          alignItems: "center",
+        }}>
+        <Text style={{ 
+          fontSize: 60, 
+          fontWeight: 200, 
+          color: colors.accent, 
+          lineHeight: 60, 
+          fontFamily: "monospace", 
+          marginTop: -4,
+        }}> 
+        +
+        </Text>
       </TouchableOpacity>
 
     </SafeAreaView>

@@ -7,10 +7,15 @@ import AddTaskModal from './components/AddTaskModal';
 
 export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);
-  
+
   const onModalClose = () => {
     setIsModalVisible(false);
   };
+
+  const handleSaveTask = (taskData: any) => {
+    console.log("Task saved:", taskData);
+  };
+
 
   return (
     <SafeAreaView style={{ flex: 1, padding: 20, backgroundColor: colors.background, alignItems: "center" }}>
@@ -34,7 +39,7 @@ export default function Index() {
         }}>
         <Ionicons name="add" size={48} color={colors.accent} /> 
       </TouchableOpacity>
-      <AddTaskModal isVisible={isModalVisible} onClose={onModalClose}></AddTaskModal>
+      <AddTaskModal isVisible={isModalVisible} onClose={onModalClose} onSave={handleSaveTask} ></AddTaskModal>
     </SafeAreaView>
   );
 }

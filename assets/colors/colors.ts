@@ -6,5 +6,7 @@ export const colors = {
   highlight: "#5CE1E6",
   textPrimary: "#FFFFFF",
   textMuted: "#A3A3A3",
+  textLabel: "#B3BAC5",
   border: "#2C2C2C",
+  //exit: "#FF3B30",
 };

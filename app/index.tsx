@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
@@ -21,16 +22,7 @@ export default function Index() {
           justifyContent: "center",
           alignItems: "center",
         }}>
-        <Text style={{ 
-          fontSize: 60, 
-          fontWeight: 200, 
-          color: colors.accent, 
-          lineHeight: 60, 
-          fontFamily: "monospace", 
-          marginTop: -4,
-        }}> 
-        +
-        </Text>
+        <Ionicons name="add" size={48} color={colors.accent} /> 
       </TouchableOpacity>
 
     </SafeAreaView>

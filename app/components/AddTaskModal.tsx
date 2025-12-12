@@ -1,6 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { colors } from "../../assets/colors/colors";
 
 type AddTaskModalProps = {
@@ -12,6 +13,21 @@ type AddTaskModalProps = {
 
 export default function AddTaskModal({ isVisible, onClose, onSave }: AddTaskModalProps) {
     const [text, setText] = useState('')
+    const [time, setTime] = useState(new Date());
+    const [date, setDate] = useState(new Date());
+    const [show, setShow] = useState(false);
+    const [mode, setMode] = useState<"date" | "time">("date");
+
+    const onChange = (event: any, selectedTime: any) => {
+        setTime(selectedTime);
+        setShow(false);
+    }
+
+    const showMode = (modeToShow: "date" | "time") => {
+        setShow(true);
+        setMode(modeToShow);
+    }
+
     return (
         <Modal animationType="fade" transparent visible={isVisible}>
         <TouchableWithoutFeedback onPress={onClose}>
@@ -30,25 +46,47 @@ export default function AddTaskModal({ isVisible, onClose, onSave }: AddTaskModa
                 <View style={styles.body}>
                     <Text style={styles.label}>Task Name</Text>
                     <View style={styles.inputBox}>
-                        <TextInput placeholder="Enter task name" placeholderTextColor={colors.textLabel}/>
+                        <TextInput 
+                            placeholder="Enter task name" 
+                            placeholderTextColor={colors.textLabel} 
+                            style={styles.input}
+                            value={text}
+                            onChangeText={setText}
+                        />
                     </View>
                     <Text style={styles.label}>Time</Text>
-                    <View style={styles.inputBox}>
-                        <TextInput placeholder="Enter time" placeholderTextColor={colors.textLabel}/>
-                    </View>
+                    <TouchableOpacity style={styles.inputBox} onPress={() => showMode('time')}>
+                        <Text style={styles.input}>
+                            {time.toDateString()}
+                        </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.label}>Deadline</Text>
+                    <TouchableOpacity style={styles.inputBox} onPress={() => showMode('date')}>
+                        <Text style={styles.input}>
+                            {date.toDateString()}
+                        </Text>
+                    </TouchableOpacity>
+                    {show && (
+                        <DateTimePicker
+                            value={date}
+                            mode={mode}
+                            display="default"
+                            onChange={onChange}
+                        />
+                    )}
                     <Text style={styles.label}>Frequency</Text>
                     <View style={styles.inputBox}>
-                        <TextInput placeholder="Enter time" placeholderTextColor={colors.textLabel}/>
-                    </View>
-                    <Text style={styles.label}>Deadline</Text>
-                    <View style={styles.inputBox}>
-                        <TextInput placeholder="Enter time" placeholderTextColor={colors.textLabel}/>
+                        <TextInput placeholder="Enter time" placeholderTextColor={colors.textLabel} style={styles.input}/>
                     </View>
                 </View>
                 <Pressable 
                     style={styles.saveButton} 
                     onPress={() => {
-                        onSave({});
+                        onSave({
+                            title: text,
+                            time: time,
+                            date: date,
+                        });
                         onClose();  
                     }}>
                     <Text style={styles.saveButtonText}>Save</Text>
@@ -96,7 +134,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.textLabel,
         marginBottom: 6,
-        marginTop: 16,
+        marginTop: 8,
         fontWeight: "bold",
     },
     inputBox: {
@@ -107,6 +145,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.card,
         paddingHorizontal: 14,
         justifyContent: "center",
+        marginBottom: 20,
     },
     body: {
         marginTop: 12,
@@ -117,7 +156,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: 12,
         gap: 8,
-        marginTop: 24,
+        marginTop: 20,
         justifyContent: "center",
         alignItems: "center",
     },
@@ -125,5 +164,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "600",
         color: "#fff",
+    },
+    input: {
+        height: 40,
+        color: colors.textPrimary,
+        outlineColor: "transparent",
+        outlineWidth: 0,
     },
 });

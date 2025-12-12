@@ -12,7 +12,8 @@ type AddTaskModalProps = {
 
 
 export default function AddTaskModal({ isVisible, onClose, onSave }: AddTaskModalProps) {
-    const [text, setText] = useState('')
+    const [title, setTitle] = useState('')
+    const [frequency, setFrequency] = useState('')
     const [time, setTime] = useState(new Date());
     const [date, setDate] = useState(new Date());
     const [show, setShow] = useState(false);
@@ -50,8 +51,8 @@ export default function AddTaskModal({ isVisible, onClose, onSave }: AddTaskModa
                             placeholder="Enter task name" 
                             placeholderTextColor={colors.textLabel} 
                             style={styles.input}
-                            value={text}
-                            onChangeText={setText}
+                            value={title}
+                            onChangeText={setTitle}
                         />
                     </View>
                     <Text style={styles.label}>Time</Text>
@@ -76,16 +77,21 @@ export default function AddTaskModal({ isVisible, onClose, onSave }: AddTaskModa
                     )}
                     <Text style={styles.label}>Frequency</Text>
                     <View style={styles.inputBox}>
-                        <TextInput placeholder="Enter time" placeholderTextColor={colors.textLabel} style={styles.input}/>
+                        <TextInput placeholder="Enter time" 
+                        placeholderTextColor={colors.textLabel} 
+                        style={styles.input}
+                        value={frequency}
+                        onChangeText={setFrequency}/>
                     </View>
                 </View>
                 <Pressable 
                     style={styles.saveButton} 
                     onPress={() => {
                         onSave({
-                            title: text,
+                            title: title,
                             time: time,
                             date: date,
+                            frequency: frequency,
                         });
                         onClose();  
                     }}>

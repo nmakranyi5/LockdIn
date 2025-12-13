@@ -9,7 +9,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
 
@@ -17,12 +17,14 @@ type AddTaskModalProps = {
   isVisible: boolean;
   onClose: () => void;
   onSave: (taskData: any) => void;
+  initialTask?: any | null;
 };
 
 export default function AddTaskModal({
   isVisible,
   onClose,
   onSave,
+  initialTask,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
   const [repeats, setRepeats] = useState("");
@@ -166,8 +168,10 @@ export default function AddTaskModal({
               onPress={() => {
                 onSave({
                   title: title,
-                  start: startTime.toLocaleTimeString(),
-                  end: endTime.toLocaleDateString(),
+                  startDate: startDate.toLocaleDateString(),
+                  startTime: startTime.toLocaleTimeString(),
+                  endDate: endDate.toLocaleDateString(),
+                  endTime: endTime.toLocaleTimeString(),
                   repeats: repeats,
                 });
                 onClose();

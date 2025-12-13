@@ -9,16 +9,24 @@ export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [tasks, setTasks] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   const totalTasks = tasks.length + 1;
   const isAddCard = currentIndex === tasks.length;
 
   const handleSaveTask = (task: any) => {
     setTasks((prev) => {
-      const newTasks = [...prev, task];
-      setCurrentIndex(newTasks.length - 1);
-      return newTasks;
+      if (editingIndex === null) {
+        setCurrentIndex(prev.length);
+        return [...prev, task];
+      } else {
+        const updated = [...prev];
+        updated[editingIndex] = task;
+        return updated;
+      }
     });
+
+    setEditingIndex(null);
   };
 
   const goLeft = () => {
@@ -31,7 +39,7 @@ export default function Index() {
 
   const onEdit = () => {
     if (isAddCard) return;
-    const taskToEdit = tasks[currentIndex];
+    setEditingIndex(currentIndex);
     setIsModalVisible(true);
   };
 
@@ -111,21 +119,17 @@ export default function Index() {
             >
               {tasks[currentIndex].title}
             </Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].start}
+            <Text style={{ color: colors.textPrimary, fontSize: 18, justifyContent: "space-between", }}>
+              {tasks[currentIndex].startDate} • {tasks[currentIndex].startTime}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].end}
+              {tasks[currentIndex].endDate} • {tasks[currentIndex].endTime}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
               {tasks[currentIndex].repeats}
             </Text>
-            <TouchableOpacity style={styles.startButton}>  
-              <Text
-                style={styles.startButtonText}
-              >
-                Start Timer
-              </Text>
+            <TouchableOpacity style={styles.startButton}>
+              <Text style={styles.startButtonText}>Start Timer</Text>
             </TouchableOpacity>
           </>
         )}
@@ -183,7 +187,11 @@ export default function Index() {
 
       <AddTaskModal
         isVisible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
+        onClose={() => {
+          setIsModalVisible(false);
+          setEditingIndex(null);
+        }}
+        initialTask={editingIndex !== null ? tasks[editingIndex] : null}
         onSave={handleSaveTask}
       />
     </SafeAreaView>
@@ -192,25 +200,24 @@ export default function Index() {
 
 const styles = StyleSheet.create({
   startButton: {
-  backgroundColor: colors.accent,
-  paddingVertical: 14,
-  paddingHorizontal: 28,
-  borderRadius: 999,
-  alignItems: "center",
-  justifyContent: "center",
-  marginTop: 16,
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.25,
-  shadowRadius: 8,
-  elevation: 6,
-},
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 
-startButtonText: {
-  color: "#fff",
-  fontSize: 16,
-  fontWeight: "700",
-  letterSpacing: 0.5,
-},
-
+  startButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
 });

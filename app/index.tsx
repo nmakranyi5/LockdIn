@@ -14,7 +14,7 @@ export default function Index() {
   const isAddCard = currentIndex === tasks.length;
 
   const handleSaveTask = (task: any) => {
-    setTasks(prev => {
+    setTasks((prev) => {
       const newTasks = [...prev, task];
       setCurrentIndex(newTasks.length - 1);
       return newTasks;
@@ -22,11 +22,30 @@ export default function Index() {
   };
 
   const goLeft = () => {
-    setCurrentIndex(i => (i - 1 + totalTasks) % totalTasks);
+    setCurrentIndex((i) => (i - 1 + totalTasks) % totalTasks);
   };
 
   const goRight = () => {
-    setCurrentIndex(i => (i + 1) % totalTasks);
+    setCurrentIndex((i) => (i + 1) % totalTasks);
+  };
+
+  const onEdit = () => {
+    if (isAddCard) return;
+    const taskToEdit = tasks[currentIndex];
+    setIsModalVisible(true);
+  };
+
+  const onDelete = () => {
+    if (isAddCard) return;
+    setTasks((prev) => {
+      const newTasks = prev.filter((_, index) => index !== currentIndex);
+      if (newTasks.length === 0) {
+        setCurrentIndex(0);
+      } else if (currentIndex >= newTasks.length) {
+        setCurrentIndex(newTasks.length - 1);
+      }
+      return newTasks;
+    });
   };
 
   return (
@@ -39,10 +58,25 @@ export default function Index() {
       }}
     >
       <View style={{ paddingBottom: 20, paddingTop: 10 }}>
-        <Text style={{ fontSize: 32, fontWeight: "bold", color: colors.textPrimary }}>
+        <Text
+          style={{
+            fontSize: 32,
+            fontWeight: "bold",
+            color: colors.textPrimary,
+          }}
+        >
           LockdIn
         </Text>
-        <Text style={{ fontSize: 22, marginTop: 10, color: colors.textMuted, justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+        <Text
+          style={{
+            fontSize: 22,
+            marginTop: 10,
+            color: colors.textMuted,
+            justifyContent: "center",
+            alignItems: "center",
+            textAlign: "center",
+          }}
+        >
           Tasks
         </Text>
       </View>
@@ -99,7 +133,11 @@ export default function Index() {
         }}
       >
         <TouchableOpacity onPress={goLeft}>
-          <Ionicons name="arrow-back-outline" size={48} color={colors.textPrimary} />
+          <Ionicons
+            name="arrow-back-outline"
+            size={48}
+            color={colors.textPrimary}
+          />
         </TouchableOpacity>
 
         <Text style={{ color: colors.textMuted }}>
@@ -107,7 +145,32 @@ export default function Index() {
         </Text>
 
         <TouchableOpacity onPress={goRight}>
-            <Ionicons name="arrow-forward-outline" size={48} color={colors.textPrimary} />
+          <Ionicons
+            name="arrow-forward-outline"
+            size={48}
+            color={colors.textPrimary}
+          />
+        </TouchableOpacity>
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: 200,
+          marginTop: 16,
+        }}
+      >
+        <TouchableOpacity onPress={onEdit}>
+          <Ionicons
+            name="pencil-outline"
+            size={32}
+            color={colors.textPrimary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={onDelete}>
+          <Ionicons name="trash-outline" size={32} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 

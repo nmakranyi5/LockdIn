@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
@@ -10,6 +11,7 @@ export default function Index() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const TASKS_KEY = "@lockdin_tasks";
 
   const totalTasks = tasks.length + 1;
   const isAddCard = currentIndex === tasks.length;
@@ -55,6 +57,23 @@ export default function Index() {
       return newTasks;
     });
   };
+
+  useEffect(() => {
+    const loadTasks = async () => {
+      const saved = await AsyncStorage.getItem(TASKS_KEY);
+      if (saved) {
+        setTasks(JSON.parse(saved));
+      }
+    };
+    loadTasks();
+  }, []);
+
+  useEffect(() => {
+    const saveTasks = async () => {
+      await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+    };
+    saveTasks();
+  }, [tasks]);
 
   return (
     <SafeAreaView
@@ -119,7 +138,13 @@ export default function Index() {
             >
               {tasks[currentIndex].title}
             </Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 18, justifyContent: "space-between", }}>
+            <Text
+              style={{
+                color: colors.textPrimary,
+                fontSize: 18,
+                justifyContent: "space-between",
+              }}
+            >
               {tasks[currentIndex].startDate} • {tasks[currentIndex].startTime}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
@@ -189,7 +214,9 @@ export default function Index() {
         isVisible={isModalVisible}
         onClose={() => {
           setIsModalVisible(false);
-          setEditingIndex(null);
+          setTimeout(() => {
+            setEditingIndex(null);
+          }, 0);
         }}
         initialTask={editingIndex !== null ? tasks[editingIndex] : null}
         onSave={handleSaveTask}

@@ -70,7 +70,7 @@ export default function AddTaskModal({
         <View style={styles.backdrop}>
           <View style={styles.popup}>
             <View style={styles.header}>
-              <Text style={styles.title}>Add Task</Text>
+              <Text style={styles.title}>{initialTask ? "Edit Task" : "Add Task"}</Text>
               <MaterialIcons
                 name="close"
                 size={24}

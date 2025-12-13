@@ -12,6 +12,7 @@ export default function Index() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const TASKS_KEY = "@lockdin_tasks";
+  const INDEX_KEY = "@lockdin_current_index";
 
   const totalTasks = tasks.length + 1;
   const isAddCard = currentIndex === tasks.length;
@@ -73,6 +74,29 @@ export default function Index() {
       await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
     };
     saveTasks();
+  }, [tasks]);
+
+  useEffect(() => {
+    const loadIndex = async () => {
+      const savedIndex = await AsyncStorage.getItem(INDEX_KEY);
+      if (savedIndex !== null) {
+        setCurrentIndex(Number(savedIndex));
+      }
+    };
+    loadIndex();
+  }, []);
+
+  useEffect(() => {
+    const saveIndex = async () => {
+      await AsyncStorage.setItem(INDEX_KEY, currentIndex.toString());
+    };
+    saveIndex();
+  }, [currentIndex]);
+
+  useEffect(() => {
+    if (currentIndex > tasks.length) {
+      setCurrentIndex(tasks.length);
+    }
   }, [tasks]);
 
   return (

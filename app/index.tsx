@@ -77,7 +77,12 @@ export default function Index() {
             >
               {tasks[currentIndex].title}
             </Text>
-
+            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
+              {tasks[currentIndex].start}
+            </Text>
+            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
+              {tasks[currentIndex].end}
+            </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
               {tasks[currentIndex].frequency}
             </Text>
@@ -98,7 +103,7 @@ export default function Index() {
         </TouchableOpacity>
 
         <Text style={{ color: colors.textMuted }}>
-          {isAddCard ? "+" : currentIndex + 1} / {totalTasks}
+          {currentIndex + 1} / {totalTasks}
         </Text>
 
         <TouchableOpacity onPress={goRight}>

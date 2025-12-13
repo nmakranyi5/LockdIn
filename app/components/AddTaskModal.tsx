@@ -11,7 +11,7 @@ import {
     TextInput,
     TouchableOpacity,
     TouchableWithoutFeedback,
-    View
+    View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
 
@@ -27,109 +27,158 @@ export default function AddTaskModal({
   onSave,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
-  const [frequency, setFrequency] = useState("");
-  const [time, setTime] = useState(new Date());
-  const [date, setDate] = useState(new Date());
-  const [show, setShow] = useState(false);
-  const [mode, setMode] = useState<"date" | "time">("date");
+  const [repeats, setRepeats] = useState("");
+  const [startTime, setStartTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date());
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [showStartTime, setShowStartTime] = useState(true);
+  const [showEndTime, setShowEndTime] = useState(true);
+  const [showStartDate, setShowStartDate] = useState(true);
+  const [showEndDate, setShowEndDate] = useState(true);
+  const showStartDateSelect = () => setShowStartDate(true);
+  const showStartTimeSelect = () => setShowStartTime(true);
+  const showEndDateSelect = () => setShowEndDate(true);
+  const showEndTimeSelect = () => setShowEndTime(true);
 
-  const onChange = (event: any, selectedTime: any) => {
-    setTime(selectedTime);
-    setShow(false);
+  const onChangeStartDate = (_: any, d?: Date) => {
+    setShowStartDate(true);
+    if (d) setStartDate(d);
   };
 
-  const showMode = (modeToShow: "date" | "time") => {
-    setShow(true);
-    setMode(modeToShow);
+  const onChangeStartTime = (_: any, t?: Date) => {
+    setShowStartTime(true);
+    if (t) setStartTime(t);
+  };
+
+  const onChangeEndDate = (_: any, d?: Date) => {
+    setShowEndDate(true);
+    if (d) setEndDate(d);
+  };
+
+  const onChangeEndTime = (_: any, t?: Date) => {
+    setShowEndTime(true);
+    if (t) setEndTime(t);
   };
 
   return (
     <Modal animationType="fade" transparent visible={isVisible}>
-        <KeyboardAvoidingView
-  behavior={Platform.OS === "ios" ? "padding" : undefined}
-  style={{ flex: 1 }}
->
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.backdrop}>
-          <TouchableWithoutFeedback onPress={() => {}}>
-            <View style={styles.popup}>
-              <View style={styles.header}>
-                <Text style={styles.title}>Add Task</Text>
-                <MaterialIcons
-                  name="close"
-                  size={24}
-                  color={colors.textMuted}
-                  onPress={onClose}
-                />
-              </View>
-              <View style={styles.body}>
-                <Text style={styles.label}>Task Name</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    placeholder="Enter task name"
-                    placeholderTextColor={colors.textLabel}
-                    style={styles.input}
-                    value={title}
-                    onChangeText={setTitle}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.backdrop}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.popup}>
+                <View style={styles.header}>
+                  <Text style={styles.title}>Add Task</Text>
+                  <MaterialIcons
+                    name="close"
+                    size={24}
+                    color={colors.textMuted}
+                    onPress={onClose}
                   />
                 </View>
-                <Text style={styles.label}>Start Time</Text>
-                <TouchableOpacity
-                  style={styles.inputBox}
-                  onPress={() => showMode("time")}
-                >
-                  {show && (
-                    <DateTimePicker
-                      value={date}
-                      mode={mode}
-                      display="default"
-                      onChange={onChange}
+                <View style={styles.body}>
+                  <Text style={styles.label}>Task Name</Text>
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      placeholder="Enter task name"
+                      placeholderTextColor={colors.textLabel}
+                      style={styles.input}
+                      value={title}
+                      onChangeText={setTitle}
                     />
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.label}>Deadline</Text>
-                <TouchableOpacity
-                  style={styles.inputBox}
-                  onPress={() => showMode("date")}
-                >
-                  {show && (
-                    <DateTimePicker
-                      value={date}
-                      mode={mode}
-                      display="default"
-                      onChange={onChange}
+                  </View>
+                  <Text style={styles.label}>Start</Text>
+                  <View style={{ flexDirection: "row" }}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={showStartDateSelect}
+                    >
+                      {showStartDate && (
+                        <DateTimePicker
+                          value={startDate}
+                          mode="date"
+                          display="default"
+                          onChange={onChangeStartDate}
+                        />
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={showStartTimeSelect}
+                    >
+                      {showStartTime && (
+                        <DateTimePicker
+                          value={startTime}
+                          mode="time"
+                          display="default"
+                          onChange={onChangeStartTime}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.label}>Deadline</Text>
+                  <View style={{ flexDirection: "row" }}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={showEndDateSelect}
+                    >
+                      {showEndDate && (
+                        <DateTimePicker
+                          value={endDate}
+                          mode="date"
+                          display="default"
+                          onChange={onChangeEndDate}
+                        />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={showEndTimeSelect}
+                    >
+                      {showEndTime && (
+                        <DateTimePicker
+                          value={endTime}
+                          mode="time"
+                          display="default"
+                          onChange={onChangeEndTime}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.label}>Repeats</Text>
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      placeholder="Enter time"
+                      placeholderTextColor={colors.textLabel}
+                      style={styles.input}
+                      value={repeats}
+                      onChangeText={setRepeats}
                     />
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.label}>Frequency</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    placeholder="Enter time"
-                    placeholderTextColor={colors.textLabel}
-                    style={styles.input}
-                    value={frequency}
-                    onChangeText={setFrequency}
-                  />
+                  </View>
                 </View>
+                <Pressable
+                  style={styles.saveButton}
+                  onPress={() => {
+                    onSave({
+                      title: title,
+                      start: startTime.toLocaleTimeString(),
+                      end: endTime.toLocaleDateString(),
+                      repeats: repeats,
+                    });
+                    onClose();
+                  }}
+                >
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </Pressable>
               </View>
-              <Pressable
-                style={styles.saveButton}
-                onPress={() => {
-                  onSave({
-                    title: title,
-                    time: time,
-                    date: date,
-                    frequency: frequency,
-                  });
-                  onClose();
-                }}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </Pressable>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </Modal>
   );

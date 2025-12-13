@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
@@ -118,8 +118,15 @@ export default function Index() {
               {tasks[currentIndex].end}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].frequency}
+              {tasks[currentIndex].repeats}
             </Text>
+            <TouchableOpacity style={styles.startButton}>  
+              <Text
+                style={styles.startButtonText}
+              >
+                Start Timer
+              </Text>
+            </TouchableOpacity>
           </>
         )}
       </View>
@@ -174,7 +181,6 @@ export default function Index() {
         </TouchableOpacity>
       </View>
 
-      {/* Modal */}
       <AddTaskModal
         isVisible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
@@ -183,3 +189,28 @@ export default function Index() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  startButton: {
+  backgroundColor: colors.accent,
+  paddingVertical: 14,
+  paddingHorizontal: 28,
+  borderRadius: 999,
+  alignItems: "center",
+  justifyContent: "center",
+  marginTop: 16,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+  elevation: 6,
+},
+
+startButtonText: {
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: "700",
+  letterSpacing: 0.5,
+},
+
+});

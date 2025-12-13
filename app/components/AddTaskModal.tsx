@@ -5,12 +5,11 @@ import {
     KeyboardAvoidingView,
     Modal,
     Platform,
-    Pressable,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
 
@@ -162,7 +161,7 @@ export default function AddTaskModal({
                 />
               </View>
             </View>
-            <Pressable
+            <TouchableOpacity
               style={styles.saveButton}
               onPress={() => {
                 onSave({
@@ -175,7 +174,7 @@ export default function AddTaskModal({
               }}
             >
               <Text style={styles.saveButtonText}>Save</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -242,6 +241,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   saveButtonText: {
     fontSize: 16,

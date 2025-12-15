@@ -102,6 +102,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeStartDate}
                       themeVariant="dark"
+                      minimumDate={new Date()}
                     />
                   )}
                 </TouchableOpacity>
@@ -117,6 +118,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeStartTime}
                       themeVariant="dark"
+                      minimumDate={new Date()}
                     />
                   )}
                 </TouchableOpacity>
@@ -134,6 +136,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndDate}
                       themeVariant="dark"
+                      minimumDate={new Date()}
                     />
                   )}
                 </TouchableOpacity>
@@ -148,6 +151,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndTime}
                       themeVariant="dark"
+                      minimumDate={new Date()}
                     />
                   )}
                 </TouchableOpacity>

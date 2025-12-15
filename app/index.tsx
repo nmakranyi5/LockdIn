@@ -1,10 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
+
+useEffect(() => {Notifications.requestPermissionsAsync();}, []);
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+Notifications.scheduleNotificationAsync({
+  content: {
+    title: 'Look at that notification',
+    body: "I'm so proud of myself!",
+  },
+  trigger: null,
+});
 
 export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);

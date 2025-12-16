@@ -23,6 +23,7 @@ export default function Index() {
     endDate: Date;
     repeats?: string;
     notificationId?: string;
+    startedAt?: number | null;
   };
 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -177,6 +178,24 @@ export default function Index() {
     });
   };
 
+  const onStartTask = () => {
+    if (isAddCard) return;
+
+    setTasks((prev) => {
+      const updated = [...prev];
+      const task = updated[currentIndex];
+
+      if (task.startedAt) return prev;
+
+      updated[currentIndex] = {
+        ...task,
+        startedAt: Date.now(),
+      };
+
+      return updated;
+    });
+  };
+
   async function confirmAddPushNotification() {
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -311,18 +330,16 @@ export default function Index() {
 
               const startMs = task.startDate.getTime();
               const endMs = task.endDate.getTime();
-
-              const isBeforeStart = nowMs < startMs;
-              const isBeforeDeadline = nowMs < endMs;
+              const hasStarted = !!task.startedAt;
 
               let label = "";
               let timeMs = 0;
               let isOverdue = false;
 
-              if (isBeforeStart) {
+              if (!hasStarted && nowMs < startMs) {
                 label = "Starts in";
                 timeMs = startMs - nowMs;
-              } else if (isBeforeDeadline) {
+              } else if (nowMs < endMs) {
                 label = "Time remaining";
                 timeMs = endMs - nowMs;
               } else {
@@ -336,7 +353,7 @@ export default function Index() {
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 60,
+                      fontSize: 50,
                       padding: 20,
                       fontWeight: "bold",
                       textAlign: "center",
@@ -365,8 +382,16 @@ export default function Index() {
                     {formatMs(timeMs)}
                   </Text>
 
-                  <TouchableOpacity style={styles.startButton}>
-                    <Text style={styles.startButtonText}>Start Task</Text>
+                  <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={onStartTask}
+                    disabled={!!tasks[currentIndex]?.startedAt}
+                  >
+                    <Text style={styles.startButtonText}>
+                      {tasks[currentIndex]?.startedAt
+                        ? "Pause Task"
+                        : "Start Task"}
+                    </Text>
                   </TouchableOpacity>
                 </>
               );

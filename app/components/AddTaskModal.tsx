@@ -126,11 +126,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeStartDate}
                       themeVariant="dark"
-                      minimumDate={
-                        startDate.toDateString() === now.toDateString()
-                          ? roundMinute(now)
-                          : undefined
-                      }
+                      minimumDate={now}
                     />
                   )}
                 </TouchableOpacity>
@@ -168,11 +164,7 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndDate}
                       themeVariant="dark"
-                      minimumDate={
-                        startDate.toDateString() === now.toDateString()
-                          ? roundMinute(now)
-                          : undefined
-                      }
+                      minimumDate={startDate}
                     />
                   )}
                 </TouchableOpacity>
@@ -188,7 +180,7 @@ export default function AddTaskModal({
                       onChange={onChangeEndTime}
                       themeVariant="dark"
                       minimumDate={
-                        startDate.toDateString() === now.toDateString()
+                        endDate.toDateString() === now.toDateString()
                           ? roundMinute(now)
                           : undefined
                       }

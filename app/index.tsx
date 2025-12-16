@@ -307,11 +307,29 @@ export default function Index() {
           <>
             {(() => {
               const task = tasks[currentIndex];
-              const isBeforeStart = now < task.startDate.getTime();
+              const nowMs = now;
 
-              const targetDate = isBeforeStart ? task.startDate : task.endDate;
+              const startMs = task.startDate.getTime();
+              const endMs = task.endDate.getTime();
 
-              const remaining = Math.max(0, targetDate.getTime() - now);
+              const isBeforeStart = nowMs < startMs;
+              const isBeforeDeadline = nowMs < endMs;
+
+              let label = "";
+              let timeMs = 0;
+              let isOverdue = false;
+
+              if (isBeforeStart) {
+                label = "Starts in";
+                timeMs = startMs - nowMs;
+              } else if (isBeforeDeadline) {
+                label = "Time remaining";
+                timeMs = endMs - nowMs;
+              } else {
+                label = "Overdue by";
+                timeMs = nowMs - endMs;
+                isOverdue = true;
+              }
 
               return (
                 <>
@@ -329,26 +347,22 @@ export default function Index() {
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 30,
+                      fontSize: 20,
                       fontWeight: "bold",
                       textAlign: "center",
                       paddingBottom: 10,
                     }}
                   >
-                    {isBeforeStart ? "Starts in" : "Time left"}
+                    {label}
                   </Text>
                   <Text
                     style={{
                       fontVariant: ["tabular-nums"],
-                      color: colors.textPrimary,
-                      fontSize: 60,
+                      fontSize: 40,
+                      color: isOverdue ? "#ff5a5a" : colors.textPrimary,
                     }}
                   >
-                    {remaining === 0
-                      ? isBeforeStart
-                        ? "Starting now"
-                        : "Deadline reached"
-                      : formatMs(remaining)}
+                    {formatMs(timeMs)}
                   </Text>
 
                   <TouchableOpacity style={styles.startButton}>

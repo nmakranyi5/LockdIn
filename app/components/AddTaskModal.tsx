@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     KeyboardAvoidingView,
     Modal,
@@ -36,6 +36,7 @@ export default function AddTaskModal({
   const [showEndTime, setShowEndTime] = useState(true);
   const [showStartDate, setShowStartDate] = useState(true);
   const [showEndDate, setShowEndDate] = useState(true);
+  const [now, setNow] = useState(new Date());
   const showStartDateSelect = () => setShowStartDate(true);
   const showStartTimeSelect = () => setShowStartTime(true);
   const showEndDateSelect = () => setShowEndDate(true);
@@ -59,6 +60,27 @@ export default function AddTaskModal({
   const onChangeEndTime = (_: any, t?: Date) => {
     setShowEndTime(true);
     if (t) setEndTime(t);
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 32_000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (startDate.toDateString() === now.toDateString() && startTime < now) {
+      setStartTime(now);
+    }
+  }, [now, startDate]);
+
+  const roundMinute = (date: Date) => {
+    const nextMinute = new Date(date);
+    nextMinute.setSeconds(0, 0);
+    nextMinute.setMinutes(nextMinute.getMinutes() + 1);
+    return nextMinute;
   };
 
   return (
@@ -104,7 +126,11 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeStartDate}
                       themeVariant="dark"
-                      minimumDate={new Date()}
+                      minimumDate={
+                        startDate.toDateString() === now.toDateString()
+                          ? roundMinute(now)
+                          : undefined
+                      }
                     />
                   )}
                 </TouchableOpacity>
@@ -120,7 +146,11 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeStartTime}
                       themeVariant="dark"
-                      minimumDate={new Date()}
+                      minimumDate={
+                        startDate.toDateString() === now.toDateString()
+                          ? roundMinute(now)
+                          : undefined
+                      }
                     />
                   )}
                 </TouchableOpacity>
@@ -138,7 +168,11 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndDate}
                       themeVariant="dark"
-                      minimumDate={new Date()}
+                      minimumDate={
+                        startDate.toDateString() === now.toDateString()
+                          ? roundMinute(now)
+                          : undefined
+                      }
                     />
                   )}
                 </TouchableOpacity>
@@ -153,7 +187,11 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndTime}
                       themeVariant="dark"
-                      minimumDate={new Date()}
+                      minimumDate={
+                        startDate.toDateString() === now.toDateString()
+                          ? roundMinute(now)
+                          : undefined
+                      }
                     />
                   )}
                 </TouchableOpacity>
@@ -172,14 +210,29 @@ export default function AddTaskModal({
             <TouchableOpacity
               style={styles.saveButton}
               onPress={() => {
+                const combinedStartDate = new Date(startDate);
+                combinedStartDate.setHours(
+                  startTime.getHours(),
+                  startTime.getMinutes(),
+                  0,
+                  0
+                );
+
+                const combinedEndDate = new Date(endDate);
+                combinedEndDate.setHours(
+                  endTime.getHours(),
+                  endTime.getMinutes(),
+                  0,
+                  0
+                );
+
                 onSave({
                   title: title,
-                  startDate: startDate.toLocaleDateString(),
-                  startTime: startTime.toLocaleTimeString(),
-                  endDate: endDate.toLocaleDateString(),
-                  endTime: endTime.toLocaleTimeString(),
-                  repeats: repeats,
+                  startDate: combinedStartDate,
+                  endDate: combinedEndDate,
+                  repeats,
                 });
+
                 onClose();
               }}
             >

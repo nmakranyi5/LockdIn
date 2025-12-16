@@ -7,28 +7,26 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
 
-useEffect(() => {Notifications.requestPermissionsAsync();}, []);
-
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
-Notifications.scheduleNotificationAsync({
-  content: {
-    title: 'Look at that notification',
-    body: "I'm so proud of myself!",
-  },
-  trigger: null,
-});
-
 export default function Index() {
+  type Task = {
+    title: string;
+    startDate: Date;
+    endDate: Date;
+    repeats?: string;
+    notificationId?: string;
+  };
+
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const TASKS_KEY = "@lockdin_tasks";
@@ -36,19 +34,87 @@ export default function Index() {
 
   const totalTasks = tasks.length + 1;
   const isAddCard = currentIndex === tasks.length;
+  const BUFFER_MS = 60_000;
 
-  const handleSaveTask = (task: any) => {
-    setTasks((prev) => {
-      if (editingIndex === null) {
-        setCurrentIndex(prev.length);
-        return [...prev, task];
-      } else {
-        const updated = [...prev];
-        updated[editingIndex] = task;
-        return updated;
+  const roundUpToNextMinute = (date: Date) => {
+    const d = new Date(date);
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 1);
+    return d;
+  };
+
+  const handleSaveTask = async (task: Task) => {
+    const now = new Date();
+
+    let fireDate = new Date(roundUpToNextMinute(task.startDate));
+
+    const minAllowed = new Date(now.getTime() + BUFFER_MS);
+
+    if (fireDate < minAllowed) {
+      fireDate = minAllowed;
+    }
+
+    if (fireDate.getTime() - now.getTime() < BUFFER_MS) {
+      fireDate = new Date(now.getTime() + BUFFER_MS);
+    }
+
+    if (editingIndex !== null) {
+      const oldTask = tasks[editingIndex];
+
+      if (oldTask.notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(
+          oldTask.notificationId
+        );
       }
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Time to start task!",
+          body: task.title,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: fireDate,
+        },
+      });
+
+      setTasks((prev) => {
+        const updated = [...prev];
+        updated[editingIndex] = {
+          ...task,
+          startDate: fireDate,
+          notificationId,
+        };
+        return updated;
+      });
+
+      setEditingIndex(null);
+      return;
+    }
+
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Time to start task!",
+        body: task.title,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: fireDate,
+      },
     });
 
+    setTasks((prev) => {
+      setCurrentIndex(prev.length);
+      confirmAddPushNotification();
+      return [
+        ...prev,
+        {
+          ...task,
+          startDate: fireDate,
+          notificationId,
+        },
+      ];
+    });
     setEditingIndex(null);
   };
 
@@ -79,11 +145,34 @@ export default function Index() {
     });
   };
 
+  async function confirmAddPushNotification() {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Task Added!",
+        body: "Successfully added task!",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 2,
+      },
+    });
+  }
+
+  useEffect(() => {
+    Notifications.requestPermissionsAsync();
+  }, []);
+
   useEffect(() => {
     const loadTasks = async () => {
       const saved = await AsyncStorage.getItem(TASKS_KEY);
       if (saved) {
-        setTasks(JSON.parse(saved));
+        const parsed: Task[] = JSON.parse(saved).map((t: any) => ({
+          ...t,
+          startDate: new Date(t.startDate),
+          endDate: new Date(t.endDate),
+        }));
+
+        setTasks(parsed);
       }
     };
     loadTasks();
@@ -189,10 +278,10 @@ export default function Index() {
                 justifyContent: "space-between",
               }}
             >
-              {tasks[currentIndex].startDate} • {tasks[currentIndex].startTime}
+              {tasks[currentIndex].startDate.toLocaleString()}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].endDate} • {tasks[currentIndex].endTime}
+              {tasks[currentIndex].endDate.toLocaleString()}
             </Text>
             <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
               {tasks[currentIndex].repeats}

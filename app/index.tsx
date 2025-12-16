@@ -89,6 +89,7 @@ export default function Index() {
       });
 
       setEditingIndex(null);
+      confirmEditPushNotification();
       return;
     }
 
@@ -115,7 +116,6 @@ export default function Index() {
         },
       ];
     });
-    setEditingIndex(null);
   };
 
   const goLeft = () => {
@@ -135,7 +135,15 @@ export default function Index() {
   const onDelete = () => {
     if (isAddCard) return;
     setTasks((prev) => {
+      const taskToDelete = prev[currentIndex];
+
+      if (taskToDelete?.notificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          taskToDelete.notificationId
+        );
+      }
       const newTasks = prev.filter((_, index) => index !== currentIndex);
+
       if (newTasks.length === 0) {
         setCurrentIndex(0);
       } else if (currentIndex >= newTasks.length) {
@@ -150,6 +158,19 @@ export default function Index() {
       content: {
         title: "Task Added!",
         body: "Successfully added task!",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 2,
+      },
+    });
+  }
+
+  async function confirmEditPushNotification() {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Task Edited!",
+        body: "Successfully edited task!",
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

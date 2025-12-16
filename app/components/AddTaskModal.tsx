@@ -196,16 +196,6 @@ export default function AddTaskModal({
                   )}
                 </TouchableOpacity>
               </View>
-              <Text style={styles.label}>Repeats</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  placeholder="Enter time"
-                  placeholderTextColor={colors.textLabel}
-                  style={styles.input}
-                  value={repeats}
-                  onChangeText={setRepeats}
-                />
-              </View>
             </View>
             <TouchableOpacity
               style={styles.saveButton}

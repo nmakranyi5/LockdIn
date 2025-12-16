@@ -36,6 +36,30 @@ export default function Index() {
   const isAddCard = currentIndex === tasks.length;
   const BUFFER_MS = 60_000;
 
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const getRemainingMs = (startDate: Date) =>
+    Math.max(0, startDate.getTime() - now);
+
+  const formatMs = (ms: number) => {
+    const total = Math.floor(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, "0")}:${s
+        .toString()
+        .padStart(2, "0")}`;
+    }
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
   const roundUpToNextMinute = (date: Date) => {
     const d = new Date(date);
     d.setSeconds(0, 0);
@@ -281,35 +305,48 @@ export default function Index() {
           </TouchableOpacity>
         ) : (
           <>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 20,
-                padding: 20,
-                fontWeight: "bold",
-                textAlign: "center",
-              }}
-            >
-              {tasks[currentIndex].title}
-            </Text>
-            <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: 18,
-                justifyContent: "space-between",
-              }}
-            >
-              {tasks[currentIndex].startDate.toLocaleString()}
-            </Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].endDate.toLocaleString()}
-            </Text>
-            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>
-              {tasks[currentIndex].repeats}
-            </Text>
-            <TouchableOpacity style={styles.startButton}>
-              <Text style={styles.startButtonText}>Start Timer</Text>
-            </TouchableOpacity>
+            {(() => {
+              const task = tasks[currentIndex];
+              const isBeforeStart = now < task.startDate.getTime();
+
+              const targetDate = isBeforeStart ? task.startDate : task.endDate;
+
+              const remaining = Math.max(0, targetDate.getTime() - now);
+
+              return (
+                <>
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 40,
+                      padding: 20,
+                      fontWeight: "bold",
+                      textAlign: "center",
+                    }}
+                  >
+                    {task.title}
+                  </Text>
+
+                  <Text
+                    style={{
+                      fontVariant: ["tabular-nums"],
+                      color: colors.textPrimary,
+                      fontSize: 30,
+                    }}
+                  >
+                    {remaining === 0
+                      ? isBeforeStart
+                        ? "Starting now"
+                        : "Deadline reached"
+                      : formatMs(remaining)}
+                  </Text>
+
+                  <TouchableOpacity style={styles.startButton}>
+                    <Text style={styles.startButtonText}>Start Timer</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
           </>
         )}
       </View>

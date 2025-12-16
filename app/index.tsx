@@ -318,7 +318,7 @@ export default function Index() {
                   <Text
                     style={{
                       color: colors.textPrimary,
-                      fontSize: 40,
+                      fontSize: 60,
                       padding: 20,
                       fontWeight: "bold",
                       textAlign: "center",
@@ -326,12 +326,22 @@ export default function Index() {
                   >
                     {task.title}
                   </Text>
-
+                  <Text
+                    style={{
+                      color: colors.textPrimary,
+                      fontSize: 30,
+                      fontWeight: "bold",
+                      textAlign: "center",
+                      paddingBottom: 10,
+                    }}
+                  >
+                    {isBeforeStart ? "Starts in" : "Time left"}
+                  </Text>
                   <Text
                     style={{
                       fontVariant: ["tabular-nums"],
                       color: colors.textPrimary,
-                      fontSize: 30,
+                      fontSize: 60,
                     }}
                   >
                     {remaining === 0
@@ -342,7 +352,7 @@ export default function Index() {
                   </Text>
 
                   <TouchableOpacity style={styles.startButton}>
-                    <Text style={styles.startButtonText}>Start Timer</Text>
+                    <Text style={styles.startButtonText}>Start Task</Text>
                   </TouchableOpacity>
                 </>
               );

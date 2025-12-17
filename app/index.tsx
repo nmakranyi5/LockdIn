@@ -24,6 +24,7 @@ export default function Index() {
     repeats?: string;
     notificationId?: string;
     startedAt?: number | null;
+    completedAt?: number | null;
   };
 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -196,6 +197,17 @@ export default function Index() {
     });
   };
 
+  const onEndTask = () => {
+    setTasks((prev) => {
+      const updated = [...prev];
+      updated[currentIndex] = {
+        ...updated[currentIndex],
+        completedAt: Date.now(),
+      };
+      return updated;
+    });
+  };
+
   async function confirmAddPushNotification() {
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -330,16 +342,18 @@ export default function Index() {
 
               const startMs = task.startDate.getTime();
               const endMs = task.endDate.getTime();
-              const hasStarted = !!task.startedAt;
 
               let label = "";
               let timeMs = 0;
               let isOverdue = false;
 
-              if (!hasStarted && nowMs < startMs) {
+              if (task.completedAt && task.startedAt) {
+                label = "Time spent";
+                timeMs = task.completedAt - task.startedAt;
+              } else if (!task.startedAt && nowMs < startMs) {
                 label = "Starts in";
                 timeMs = startMs - nowMs;
-              } else if (nowMs < endMs) {
+              } else if (task.startedAt && nowMs < endMs) {
                 label = "Time remaining";
                 timeMs = endMs - nowMs;
               } else {
@@ -381,18 +395,26 @@ export default function Index() {
                   >
                     {formatMs(timeMs)}
                   </Text>
+                  {!task.startedAt && !task.completedAt && (
+                    <TouchableOpacity
+                      style={styles.startButton}
+                      onPress={onStartTask}
+                    >
+                      <Text style={styles.startButtonText}>Start Task</Text>
+                    </TouchableOpacity>
+                  )}
 
-                  <TouchableOpacity
-                    style={styles.startButton}
-                    onPress={onStartTask}
-                    disabled={!!tasks[currentIndex]?.startedAt}
-                  >
-                    <Text style={styles.startButtonText}>
-                      {tasks[currentIndex]?.startedAt
-                        ? "Pause Task"
-                        : "Start Task"}
-                    </Text>
-                  </TouchableOpacity>
+                  {task.startedAt && !task.completedAt && (
+                    <TouchableOpacity
+                      style={[
+                        styles.startButton,
+                        { backgroundColor: "#ff5a5a" },
+                      ]}
+                      onPress={onEndTask}
+                    >
+                      <Text style={styles.startButtonText}>End Task</Text>
+                    </TouchableOpacity>
+                  )}
                 </>
               );
             })()}

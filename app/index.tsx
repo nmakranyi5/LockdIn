@@ -575,7 +575,7 @@ export default function Index() {
       <ConfirmModal
         visible={confirmEndVisible}
         title="End Task?"
-        message="Are you sure you want to mark this task as completed?"
+        message="Are you sure that the task is done? Be honest. 🙏"
         confirmText="End Task"
         onCancel={() => setConfirmEndVisible(false)}
         onConfirm={() => {

@@ -25,6 +25,7 @@ export default function Index() {
     repeats?: string;
     startNotificationId?: string;
     deadlineNotificationId?: string;
+    reminderNotificationId?: string;
     startedAt?: number | null;
     completedAt?: number | null;
   };
@@ -46,15 +47,12 @@ export default function Index() {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(id);
   }, []);
 
-  const getRemainingMs = (startDate: Date) =>
-    Math.max(0, startDate.getTime() - now);
-
   const formatMs = (ms: number) => {
-    const total = Math.floor(ms / 1000);
+    const total = Math.ceil(ms / 1000);
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
@@ -67,99 +65,37 @@ export default function Index() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const roundUpToNextMinute = (date: Date) => {
-    const d = new Date(date);
-    d.setSeconds(0, 0);
-    d.setMinutes(d.getMinutes() + 1);
-    return d;
+  const normalizeStartTime = (selected: Date) => {
+    const currentNow = new Date();
+    const normalized = new Date(selected);
+
+    normalized.setSeconds(0, 0);
+    normalized.setMilliseconds(0);
+
+    if (normalized.getTime() <= currentNow.getTime()) {
+      normalized.setMinutes(normalized.getMinutes() + 1);
+    }
+
+    return normalized;
   };
 
   const handleSaveTask = async (task: Task) => {
-    const now = new Date();
-
-    let fireDate = new Date(roundUpToNextMinute(task.startDate));
-
-    const minAllowed = new Date(now.getTime() + BUFFER_MS);
-
-    if (fireDate < minAllowed) {
-      fireDate = minAllowed;
-    }
-
-    if (fireDate.getTime() - now.getTime() < BUFFER_MS) {
-      fireDate = new Date(now.getTime() + BUFFER_MS);
-    }
+    const fireDate = normalizeStartTime(task.startDate);
 
     let deadlineFireDate = new Date(task.endDate);
+    deadlineFireDate.setSeconds(0, 0);
+    deadlineFireDate.setMilliseconds(0);
 
-    const minDeadline = new Date(fireDate.getTime() + BUFFER_MS);
+    const now = Date.now();
+    const startMs = fireDate.getTime();
+    const firstReminderDelay = Math.max(1, (startMs + 120_000 - now) / 1000);
 
-    if (deadlineFireDate < minDeadline) {
-      deadlineFireDate = minDeadline;
-    }
-
-    if (editingIndex !== null) {
-      const oldTask = tasks[editingIndex];
-
-      if (oldTask.startNotificationId) {
-        await Notifications.cancelScheduledNotificationAsync(
-          oldTask.startNotificationId
-        );
-      }
-
-      if (oldTask.deadlineNotificationId) {
-        await Notifications.cancelScheduledNotificationAsync(
-          oldTask.deadlineNotificationId
-        );
-      }
-
-      const startNotificationId = await Notifications.scheduleNotificationAsync(
-        {
-          content: {
-            title: "Time to start task!",
-            body: task.title,
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: fireDate,
-          },
-        }
-      );
-
-      const deadlineNotificationId =
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Task deadline reached!",
-            body: task.title,
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: deadlineFireDate,
-          },
-        });
-
-      setTasks((prev) => {
-        const updated = [...prev];
-        updated[editingIndex] = {
-          ...task,
-          startDate: fireDate,
-          startNotificationId,
-          deadlineNotificationId,
-          startedAt: null,
-          completedAt: null,
-        };
-        return updated;
-      });
-
-      setEditingIndex(null);
-      confirmEditPushNotification();
-      return;
+    if (deadlineFireDate.getTime() <= fireDate.getTime()) {
+      deadlineFireDate = new Date(fireDate.getTime() + 60_000);
     }
 
     const startNotificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Time to start task!",
-        body: task.title,
-      },
+      content: { title: "Time to start task!", body: task.title },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: fireDate,
@@ -168,31 +104,50 @@ export default function Index() {
 
     const deadlineNotificationId =
       await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Task deadline reached!",
-          body: task.title,
-        },
+        content: { title: "Task deadline reached!", body: task.title },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: deadlineFireDate,
         },
       });
 
-    setTasks((prev) => {
-      setCurrentIndex(prev.length);
-      confirmAddPushNotification();
-      return [
-        ...prev,
-        {
-          ...task,
-          startDate: fireDate,
-          startNotificationId,
-          deadlineNotificationId,
-          startedAt: null,
-          completedAt: null,
+    const reminderNotificationId =
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Hey! Start your task!",
+          body: `You are overdue to start: ${task.title}`,
         },
-      ];
-    });
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: Math.floor(firstReminderDelay),
+          repeats: true,
+        },
+      });
+
+    const updatedTask = {
+      ...task,
+      startDate: fireDate,
+      endDate: deadlineFireDate,
+      startNotificationId,
+      deadlineNotificationId,
+      reminderNotificationId,
+      startedAt: null,
+      completedAt: null,
+    };
+
+    if (editingIndex !== null) {
+      setTasks((prev) => {
+        const updated = [...prev];
+        updated[editingIndex] = updatedTask;
+        return updated;
+      });
+      setEditingIndex(null);
+      confirmEditPushNotification();
+    } else {
+      setTasks((prev) => [...prev, updatedTask]);
+      setCurrentIndex(tasks.length);
+      confirmAddPushNotification();
+    }
   };
 
   const goLeft = () => {
@@ -225,6 +180,12 @@ export default function Index() {
         );
       }
 
+      if (taskToDelete?.reminderNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          taskToDelete.reminderNotificationId
+        );
+      }
+
       const newTasks = prev.filter((_, index) => index !== currentIndex);
 
       if (newTasks.length === 0) {
@@ -251,6 +212,12 @@ export default function Index() {
         );
       }
 
+      if (task?.reminderNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          task.reminderNotificationId
+        );
+      }
+
       updated[currentIndex] = {
         ...task,
         startedAt: Date.now(),
@@ -268,6 +235,12 @@ export default function Index() {
       if (task?.deadlineNotificationId) {
         Notifications.cancelScheduledNotificationAsync(
           task.deadlineNotificationId
+        );
+      }
+
+      if (task?.reminderNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          task.reminderNotificationId
         );
       }
 
@@ -424,13 +397,19 @@ export default function Index() {
               } else if (!task.startedAt && nowMs < startMs) {
                 label = "Starts in";
                 timeMs = Math.max(0, startMs - nowMs);
-              } else if (task.startedAt && nowMs < endMs) {
-                label = "Time remaining";
-                timeMs = Math.max(0, endMs - nowMs);
-              } else {
+              } else if (!task.startedAt && nowMs >= startMs) {
                 label = "Overdue by";
-                timeMs = Math.max(0, nowMs - endMs);
+                timeMs = Math.max(0, nowMs - startMs);
                 isOverdue = true;
+              } else if (task.startedAt && !task.completedAt) {
+                if (nowMs < endMs) {
+                  label = "Time remaining";
+                  timeMs = Math.max(0, endMs - nowMs);
+                } else {
+                  label = "Deadline passed by";
+                  timeMs = Math.max(0, nowMs - endMs);
+                  isOverdue = true;
+                }
               }
 
               return (

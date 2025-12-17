@@ -77,10 +77,14 @@ export default function AddTaskModal({
   }, [now, startDate]);
 
   const roundMinute = (date: Date) => {
-    const nextMinute = new Date(date);
-    nextMinute.setSeconds(0, 0);
-    nextMinute.setMinutes(nextMinute.getMinutes() + 1);
-    return nextMinute;
+    const d = new Date(date);
+    d.setSeconds(0, 0);
+    d.setMilliseconds(0);
+
+    if (d.getTime() <= Date.now()) {
+      d.setMinutes(d.getMinutes() + 1);
+    }
+    return d;
   };
 
   return (
@@ -144,7 +148,7 @@ export default function AddTaskModal({
                       themeVariant="dark"
                       minimumDate={
                         startDate.toDateString() === now.toDateString()
-                          ? roundMinute(now)
+                          ? now
                           : undefined
                       }
                     />
@@ -179,11 +183,16 @@ export default function AddTaskModal({
                       display="default"
                       onChange={onChangeEndTime}
                       themeVariant="dark"
-                      minimumDate={
-                        endDate.toDateString() === now.toDateString()
-                          ? roundMinute(now)
-                          : undefined
-                      }
+                      minimumDate={(() => {
+                        const d = new Date(startDate);
+                        d.setHours(
+                          startTime.getHours(),
+                          startTime.getMinutes() + 1,
+                          0,
+                          0
+                        );
+                        return d;
+                      })()}
                     />
                   )}
                 </TouchableOpacity>
@@ -200,6 +209,8 @@ export default function AddTaskModal({
                   0
                 );
 
+                const finalStart = roundMinute(combinedStartDate);
+
                 const combinedEndDate = new Date(endDate);
                 combinedEndDate.setHours(
                   endTime.getHours(),
@@ -207,10 +218,12 @@ export default function AddTaskModal({
                   0,
                   0
                 );
+                combinedEndDate.setSeconds(0, 0);
+                combinedEndDate.setMilliseconds(0);
 
                 onSave({
                   title: title,
-                  startDate: combinedStartDate,
+                  startDate: finalStart,
                   endDate: combinedEndDate,
                   repeats,
                 });

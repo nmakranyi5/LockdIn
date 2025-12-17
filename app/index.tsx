@@ -6,6 +6,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
+import ConfirmModal from "./components/ConfirmModal";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -32,6 +33,9 @@ export default function Index() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [confirmEndVisible, setConfirmEndVisible] = useState(false);
+
   const TASKS_KEY = "@lockdin_tasks";
   const INDEX_KEY = "@lockdin_current_index";
 
@@ -477,7 +481,7 @@ export default function Index() {
                         styles.startButton,
                         { backgroundColor: "#ff5a5a" },
                       ]}
-                      onPress={onEndTask}
+                      onPress={() => setConfirmEndVisible(true)}
                     >
                       <Text style={styles.startButtonText}>End Task</Text>
                     </TouchableOpacity>
@@ -534,7 +538,12 @@ export default function Index() {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onDelete}>
+        <TouchableOpacity
+          onPress={() => {
+            if (isAddCard || tasks.length === 0) return;
+            setConfirmDeleteVisible(true);
+          }}
+        >
           <Ionicons name="trash-outline" size={32} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
@@ -549,6 +558,30 @@ export default function Index() {
         }}
         initialTask={editingIndex !== null ? tasks[editingIndex] : null}
         onSave={handleSaveTask}
+      />
+
+      <ConfirmModal
+        visible={confirmDeleteVisible}
+        title="Delete Task?"
+        message="This action cannot be undone."
+        confirmText="Delete"
+        onCancel={() => setConfirmDeleteVisible(false)}
+        onConfirm={() => {
+          setConfirmDeleteVisible(false);
+          onDelete();
+        }}
+      />
+
+      <ConfirmModal
+        visible={confirmEndVisible}
+        title="End Task?"
+        message="Are you sure you want to mark this task as completed?"
+        confirmText="End Task"
+        onCancel={() => setConfirmEndVisible(false)}
+        onConfirm={() => {
+          setConfirmEndVisible(false);
+          onEndTask();
+        }}
       />
     </SafeAreaView>
   );

@@ -65,21 +65,28 @@ export default function AddTaskModal({
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(new Date());
-    }, 32_000);
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (startDate.toDateString() === now.toDateString() && startTime < now) {
-      setStartTime(now);
+    const currentTime = new Date(now);
+    currentTime.setSeconds(0, 0);
+
+    const selectedStart = new Date(startTime);
+
+    if (
+      startDate.toDateString() === now.toDateString() &&
+      selectedStart.getTime() < currentTime.getTime()
+    ) {
+      setStartTime(currentTime);
     }
   }, [now, startDate]);
 
   const roundMinute = (date: Date) => {
     const d = new Date(date);
     d.setSeconds(0, 0);
-    d.setMilliseconds(0);
 
     if (d.getTime() <= Date.now()) {
       d.setMinutes(d.getMinutes() + 1);

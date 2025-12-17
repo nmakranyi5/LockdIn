@@ -70,7 +70,6 @@ export default function Index() {
     const normalized = new Date(selected);
 
     normalized.setSeconds(0, 0);
-    normalized.setMilliseconds(0);
 
     if (normalized.getTime() <= currentNow.getTime()) {
       normalized.setMinutes(normalized.getMinutes() + 1);
@@ -80,15 +79,30 @@ export default function Index() {
   };
 
   const handleSaveTask = async (task: Task) => {
+    if (editingIndex !== null) {
+      const oldTask = tasks[editingIndex];
+      if (oldTask.startNotificationId)
+        await Notifications.cancelScheduledNotificationAsync(
+          oldTask.startNotificationId
+        );
+      if (oldTask.deadlineNotificationId)
+        await Notifications.cancelScheduledNotificationAsync(
+          oldTask.deadlineNotificationId
+        );
+      if (oldTask.reminderNotificationId)
+        await Notifications.cancelScheduledNotificationAsync(
+          oldTask.reminderNotificationId
+        );
+    }
     const fireDate = normalizeStartTime(task.startDate);
-
+    const startMs = fireDate.getTime();
     let deadlineFireDate = new Date(task.endDate);
     deadlineFireDate.setSeconds(0, 0);
     deadlineFireDate.setMilliseconds(0);
 
-    const now = Date.now();
-    const startMs = fireDate.getTime();
-    const firstReminderDelay = Math.max(1, (startMs + 120_000 - now) / 1000);
+    const nowMs = Date.now();
+    const secondsUntilStart = (startMs - nowMs) / 1000;
+    const secondsUntilFirstReminder = secondsUntilStart + 60;
 
     if (deadlineFireDate.getTime() <= fireDate.getTime()) {
       deadlineFireDate = new Date(fireDate.getTime() + 60_000);
@@ -119,7 +133,7 @@ export default function Index() {
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: Math.floor(firstReminderDelay),
+          seconds: Math.max(60, Math.floor(secondsUntilFirstReminder)),
           repeats: true,
         },
       });
@@ -166,26 +180,27 @@ export default function Index() {
 
   const onDelete = () => {
     if (isAddCard) return;
+
+    const taskToDelete = tasks[currentIndex];
+    if (!taskToDelete) return;
+
+    const {
+      startNotificationId,
+      deadlineNotificationId,
+      reminderNotificationId,
+    } = taskToDelete;
+
+    if (startNotificationId) {
+      Notifications.cancelScheduledNotificationAsync(startNotificationId);
+    }
+    if (deadlineNotificationId) {
+      Notifications.cancelScheduledNotificationAsync(deadlineNotificationId);
+    }
+    if (reminderNotificationId) {
+      Notifications.cancelScheduledNotificationAsync(reminderNotificationId);
+    }
+
     setTasks((prev) => {
-      const taskToDelete = prev[currentIndex];
-
-      if (taskToDelete?.startNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          taskToDelete.startNotificationId
-        );
-      }
-      if (taskToDelete?.deadlineNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          taskToDelete.deadlineNotificationId
-        );
-      }
-
-      if (taskToDelete?.reminderNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          taskToDelete.reminderNotificationId
-        );
-      }
-
       const newTasks = prev.filter((_, index) => index !== currentIndex);
 
       if (newTasks.length === 0) {
@@ -384,8 +399,8 @@ export default function Index() {
               const task = tasks[currentIndex];
               const nowMs = now;
 
-              const startMs = task.startDate.getTime();
-              const endMs = task.endDate.getTime();
+              const startMs = new Date(task.startDate).setSeconds(0, 0);
+              const endMs = new Date(task.endDate).setSeconds(0, 0);
 
               let label = "";
               let timeMs = 0;
@@ -397,11 +412,7 @@ export default function Index() {
               } else if (!task.startedAt && nowMs < startMs) {
                 label = "Starts in";
                 timeMs = Math.max(0, startMs - nowMs);
-              } else if (!task.startedAt && nowMs >= startMs) {
-                label = "Overdue by";
-                timeMs = Math.max(0, nowMs - startMs);
-                isOverdue = true;
-              } else if (task.startedAt && !task.completedAt) {
+              } else {
                 if (nowMs < endMs) {
                   label = "Time remaining";
                   timeMs = Math.max(0, endMs - nowMs);

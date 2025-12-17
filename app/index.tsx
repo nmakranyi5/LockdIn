@@ -22,7 +22,8 @@ export default function Index() {
     startDate: Date;
     endDate: Date;
     repeats?: string;
-    notificationId?: string;
+    startNotificationId?: string;
+    deadlineNotificationId?: string;
     startedAt?: number | null;
     completedAt?: number | null;
   };
@@ -84,32 +85,63 @@ export default function Index() {
       fireDate = new Date(now.getTime() + BUFFER_MS);
     }
 
+    let deadlineFireDate = new Date(task.endDate);
+
+    const minDeadline = new Date(fireDate.getTime() + BUFFER_MS);
+
+    if (deadlineFireDate < minDeadline) {
+      deadlineFireDate = minDeadline;
+    }
+
     if (editingIndex !== null) {
       const oldTask = tasks[editingIndex];
 
-      if (oldTask.notificationId) {
+      if (oldTask.startNotificationId) {
         await Notifications.cancelScheduledNotificationAsync(
-          oldTask.notificationId
+          oldTask.startNotificationId
         );
       }
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Time to start task!",
-          body: task.title,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: fireDate,
-        },
-      });
+      if (oldTask.deadlineNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(
+          oldTask.deadlineNotificationId
+        );
+      }
+
+      const startNotificationId = await Notifications.scheduleNotificationAsync(
+        {
+          content: {
+            title: "Time to start task!",
+            body: task.title,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: fireDate,
+          },
+        }
+      );
+
+      const deadlineNotificationId =
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Task deadline reached!",
+            body: task.title,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: deadlineFireDate,
+          },
+        });
 
       setTasks((prev) => {
         const updated = [...prev];
         updated[editingIndex] = {
           ...task,
           startDate: fireDate,
-          notificationId,
+          startNotificationId,
+          deadlineNotificationId,
+          startedAt: null,
+          completedAt: null,
         };
         return updated;
       });
@@ -119,7 +151,7 @@ export default function Index() {
       return;
     }
 
-    const notificationId = await Notifications.scheduleNotificationAsync({
+    const startNotificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: "Time to start task!",
         body: task.title,
@@ -130,6 +162,18 @@ export default function Index() {
       },
     });
 
+    const deadlineNotificationId =
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Task deadline reached!",
+          body: task.title,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: deadlineFireDate,
+        },
+      });
+
     setTasks((prev) => {
       setCurrentIndex(prev.length);
       confirmAddPushNotification();
@@ -138,7 +182,10 @@ export default function Index() {
         {
           ...task,
           startDate: fireDate,
-          notificationId,
+          startNotificationId,
+          deadlineNotificationId,
+          startedAt: null,
+          completedAt: null,
         },
       ];
     });
@@ -163,11 +210,17 @@ export default function Index() {
     setTasks((prev) => {
       const taskToDelete = prev[currentIndex];
 
-      if (taskToDelete?.notificationId) {
+      if (taskToDelete?.startNotificationId) {
         Notifications.cancelScheduledNotificationAsync(
-          taskToDelete.notificationId
+          taskToDelete.startNotificationId
         );
       }
+      if (taskToDelete?.deadlineNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          taskToDelete.deadlineNotificationId
+        );
+      }
+
       const newTasks = prev.filter((_, index) => index !== currentIndex);
 
       if (newTasks.length === 0) {
@@ -188,6 +241,12 @@ export default function Index() {
 
       if (task.startedAt) return prev;
 
+      if (task?.startNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          task.startNotificationId
+        );
+      }
+
       updated[currentIndex] = {
         ...task,
         startedAt: Date.now(),
@@ -200,6 +259,14 @@ export default function Index() {
   const onEndTask = () => {
     setTasks((prev) => {
       const updated = [...prev];
+      const task = updated[currentIndex];
+
+      if (task?.deadlineNotificationId) {
+        Notifications.cancelScheduledNotificationAsync(
+          task.deadlineNotificationId
+        );
+      }
+
       updated[currentIndex] = {
         ...updated[currentIndex],
         completedAt: Date.now(),
@@ -349,16 +416,16 @@ export default function Index() {
 
               if (task.completedAt && task.startedAt) {
                 label = "Time spent";
-                timeMs = task.completedAt - task.startedAt;
+                timeMs = Math.max(0, task.completedAt - task.startedAt);
               } else if (!task.startedAt && nowMs < startMs) {
                 label = "Starts in";
-                timeMs = startMs - nowMs;
+                timeMs = Math.max(0, startMs - nowMs);
               } else if (task.startedAt && nowMs < endMs) {
                 label = "Time remaining";
-                timeMs = endMs - nowMs;
+                timeMs = Math.max(0, endMs - nowMs);
               } else {
                 label = "Overdue by";
-                timeMs = nowMs - endMs;
+                timeMs = Math.max(0, nowMs - endMs);
                 isOverdue = true;
               }
 

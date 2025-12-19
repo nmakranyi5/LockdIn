@@ -36,7 +36,6 @@ export default function AddTaskModal({
   const [showEndTime, setShowEndTime] = useState(true);
   const [showStartDate, setShowStartDate] = useState(true);
   const [showEndDate, setShowEndDate] = useState(true);
-  const [now, setNow] = useState(new Date());
   const showStartDateSelect = () => setShowStartDate(true);
   const showStartTimeSelect = () => setShowStartTime(true);
   const showEndDateSelect = () => setShowEndDate(true);
@@ -62,10 +61,46 @@ export default function AddTaskModal({
     if (t) setEndTime(t);
   };
 
+  const getMinuteNow = () => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    return d;
+  };
+
+  const getNextMinute = () => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 1);
+    return d;
+  };
+
+  const [now, setNow] = useState(getNextMinute);
+
+  useEffect(() => {
+    // ms until the next minute boundary
+    const msToNextMinute = 60000 - (Date.now() % 60000);
+
+    const timeout = setTimeout(() => {
+      setNow(getNextMinute());
+
+      // after first sync, update exactly every minute
+      const interval = setInterval(() => {
+        setNow(getNextMinute());
+      }, 60000);
+
+      // cleanup interval on unmount
+      return () => clearInterval(interval);
+    }, msToNextMinute);
+
+    return () => clearTimeout(timeout);
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      setNow(new Date());
-    }, 100);
+      const d = new Date();
+      d.setSeconds(0, 0);
+      setNow(d);
+    }, 60_000);
 
     return () => clearInterval(interval);
   }, []);
@@ -91,6 +126,13 @@ export default function AddTaskModal({
     if (d.getTime() <= Date.now()) {
       d.setMinutes(d.getMinutes() + 1);
     }
+    return d;
+  };
+
+  const getMinStartTime = () => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 1);
     return d;
   };
 
@@ -154,8 +196,8 @@ export default function AddTaskModal({
                       onChange={onChangeStartTime}
                       themeVariant="dark"
                       minimumDate={
-                        startDate.toDateString() === now.toDateString()
-                          ? now
+                        startDate.toDateString() === new Date().toDateString()
+                          ? getMinStartTime()
                           : undefined
                       }
                     />

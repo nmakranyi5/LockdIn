@@ -32,33 +32,44 @@ export default function AddTaskModal({
   const [endTime, setEndTime] = useState(new Date());
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-  const [showStartTime, setShowStartTime] = useState(true);
-  const [showEndTime, setShowEndTime] = useState(true);
-  const [showStartDate, setShowStartDate] = useState(true);
-  const [showEndDate, setShowEndDate] = useState(true);
+
+  const isAndroid = Platform.OS === "android";
+  const [showStartTime, setShowStartTime] = useState(!isAndroid);
+  const [showEndTime, setShowEndTime] = useState(!isAndroid);
+  const [showStartDate, setShowStartDate] = useState(!isAndroid);
+  const [showEndDate, setShowEndDate] = useState(!isAndroid);
+
   const showStartDateSelect = () => setShowStartDate(true);
   const showStartTimeSelect = () => setShowStartTime(true);
   const showEndDateSelect = () => setShowEndDate(true);
   const showEndTimeSelect = () => setShowEndTime(true);
 
   const onChangeStartDate = (_: any, d?: Date) => {
-    setShowStartDate(true);
     if (d) setStartDate(d);
+    if (isAndroid) setShowStartDate(false);
   };
 
   const onChangeStartTime = (_: any, t?: Date) => {
-    setShowStartTime(true);
     if (t) setStartTime(t);
+    if (isAndroid) setShowStartTime(false);
   };
 
   const onChangeEndDate = (_: any, d?: Date) => {
-    setShowEndDate(true);
     if (d) setEndDate(d);
+    if (isAndroid) setShowEndDate(false);
   };
 
-  const onChangeEndTime = (_: any, t?: Date) => {
-    setShowEndTime(true);
-    if (t) setEndTime(t);
+  const onChangeEndTime = (event: any, selectedDate?: Date) => {
+    if (isAndroid) setShowEndTime(false);
+
+    if (selectedDate) {
+      if (selectedDate < startTime) {
+        alert("End time cannot be before start time");
+        setEndTime(startTime);
+      } else {
+        setEndTime(selectedDate);
+      }
+    }
   };
 
   const getMinuteNow = () => {
@@ -74,21 +85,31 @@ export default function AddTaskModal({
     return d;
   };
 
+  function normalize(date: Date) {
+    const d = new Date(date);
+    d.setSeconds(0);
+    d.setMilliseconds(0);
+    return d;
+  }
+
+  function minDeadlineFromStart(start: Date) {
+    const d = new Date(start);
+    d.setMinutes(d.getMinutes() + 1);
+    return d;
+  }
+
   const [now, setNow] = useState(getNextMinute);
 
   useEffect(() => {
-    // ms until the next minute boundary
     const msToNextMinute = 60000 - (Date.now() % 60000);
 
     const timeout = setTimeout(() => {
       setNow(getNextMinute());
 
-      // after first sync, update exactly every minute
       const interval = setInterval(() => {
         setNow(getNextMinute());
       }, 60000);
 
-      // cleanup interval on unmount
       return () => clearInterval(interval);
     }, msToNextMinute);
 
@@ -170,13 +191,13 @@ export default function AddTaskModal({
               <View style={{ flexDirection: "row" }}>
                 <TouchableOpacity
                   style={{ flex: 1 }}
-                  onPress={showStartDateSelect}
+                  onPress={() => isAndroid && setShowStartDate(true)}
                 >
-                  {showStartDate && (
+                  {(!isAndroid || showStartDate) && (
                     <DateTimePicker
                       value={startDate}
                       mode="date"
-                      display="default"
+                      display={isAndroid ? "calendar" : "default"}
                       onChange={onChangeStartDate}
                       themeVariant="dark"
                       minimumDate={now}
@@ -186,17 +207,17 @@ export default function AddTaskModal({
 
                 <TouchableOpacity
                   style={{ flex: 1 }}
-                  onPress={showStartTimeSelect}
+                  onPress={() => isAndroid && setShowStartTime(true)}
                 >
-                  {showStartTime && (
+                  {(!isAndroid || showStartTime) && (
                     <DateTimePicker
                       value={startTime}
                       mode="time"
-                      display="default"
+                      display={isAndroid ? "clock" : "default"}
                       onChange={onChangeStartTime}
                       themeVariant="dark"
                       minimumDate={
-                        startDate.toDateString() === new Date().toDateString()
+                        startDate.toDateString() === now.toDateString()
                           ? getMinStartTime()
                           : undefined
                       }
@@ -208,40 +229,46 @@ export default function AddTaskModal({
               <View style={{ flexDirection: "row" }}>
                 <TouchableOpacity
                   style={{ flex: 1 }}
-                  onPress={showEndDateSelect}
+                  onPress={() => isAndroid && setShowEndDate(true)}
                 >
-                  {showEndDate && (
+                  {(!isAndroid || showEndDate) && (
                     <DateTimePicker
                       value={endDate}
                       mode="date"
-                      display="default"
+                      display={isAndroid ? "calendar" : "default"}
                       onChange={onChangeEndDate}
                       themeVariant="dark"
                       minimumDate={startDate}
                     />
                   )}
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={{ flex: 1 }}
-                  onPress={showEndTimeSelect}
+                  onPress={() => isAndroid && setShowEndTime(true)}
                 >
-                  {showEndTime && (
+                  {(!isAndroid || showEndTime) && (
                     <DateTimePicker
+                      key={endTime.getTime()}
                       value={endTime}
                       mode="time"
-                      display="default"
+                      display={isAndroid ? "clock" : "default"}
                       onChange={onChangeEndTime}
                       themeVariant="dark"
-                      minimumDate={(() => {
-                        const d = new Date(startDate);
-                        d.setHours(
-                          startTime.getHours(),
-                          startTime.getMinutes() + 1,
-                          0,
-                          0
-                        );
-                        return d;
-                      })()}
+                      minimumDate={
+                        endDate.toDateString() === startDate.toDateString()
+                          ? (() => {
+                              const d = new Date(startDate);
+                              d.setHours(
+                                startTime.getHours(),
+                                startTime.getMinutes() + 1,
+                                0,
+                                0
+                              );
+                              return d;
+                            })()
+                          : undefined
+                      }
                     />
                   )}
                 </TouchableOpacity>

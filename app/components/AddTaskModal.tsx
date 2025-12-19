@@ -39,6 +39,11 @@ export default function AddTaskModal({
   const [showStartDate, setShowStartDate] = useState(!isAndroid);
   const [showEndDate, setShowEndDate] = useState(!isAndroid);
 
+  const formatDate = (d: Date) => d.toLocaleDateString();
+
+  const formatTime = (d: Date) =>
+    d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
   const showStartDateSelect = () => setShowStartDate(true);
   const showStartTimeSelect = () => setShowStartTime(true);
   const showEndDateSelect = () => setShowEndDate(true);
@@ -49,9 +54,35 @@ export default function AddTaskModal({
     if (isAndroid) setShowStartDate(false);
   };
 
+  const getNextMinute = () => {
+    const d = new Date();
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 1);
+    return d;
+  };
+
+  const [now, setNow] = useState(getNextMinute);
+
   const onChangeStartTime = (_: any, t?: Date) => {
-    if (t) setStartTime(t);
     if (isAndroid) setShowStartTime(false);
+    if (!t) return;
+
+    const picked = normalize(t);
+
+    if (isAndroid) {
+      const nowDate = new Date();
+      nowDate.setSeconds(0, 0);
+
+      if (
+        startDate.toDateString() === nowDate.toDateString() &&
+        picked < nowDate
+      ) {
+        setStartTime(nowDate);
+        return;
+      }
+    }
+
+    setStartTime(picked);
   };
 
   const onChangeEndDate = (_: any, d?: Date) => {
@@ -59,17 +90,27 @@ export default function AddTaskModal({
     if (isAndroid) setShowEndDate(false);
   };
 
-  const onChangeEndTime = (event: any, selectedDate?: Date) => {
+  const onChangeEndTime = (_: any, selectedDate?: Date) => {
     if (isAndroid) setShowEndTime(false);
+    if (!selectedDate) return;
 
-    if (selectedDate) {
-      if (selectedDate < startTime) {
-        alert("End time cannot be before start time");
-        setEndTime(startTime);
-      } else {
-        setEndTime(selectedDate);
+    const picked = normalize(selectedDate);
+
+    let minAllowed = new Date(startDate);
+    minAllowed.setHours(startTime.getHours(), startTime.getMinutes() + 1, 0, 0);
+
+    if (isAndroid) {
+      const nowDate = new Date();
+      nowDate.setSeconds(0, 0);
+
+      if (endDate.toDateString() === nowDate.toDateString()) {
+        const minNow = new Date(nowDate);
+        minNow.setMinutes(minNow.getMinutes() + 1);
+        if (minNow > minAllowed) minAllowed = minNow;
       }
     }
+
+    setEndTime(picked < minAllowed ? minAllowed : picked);
   };
 
   const getMinuteNow = () => {
@@ -78,12 +119,21 @@ export default function AddTaskModal({
     return d;
   };
 
-  const getNextMinute = () => {
-    const d = new Date();
-    d.setSeconds(0, 0);
-    d.setMinutes(d.getMinutes() + 1);
-    return d;
-  };
+  useEffect(() => {
+    if (!isAndroid) return;
+
+    const nowDate = new Date();
+    nowDate.setSeconds(0, 0);
+
+    let minStart = nowDate;
+
+    if (startDate.toDateString() !== nowDate.toDateString()) return;
+
+    setStartTime((prev) => {
+      const normalized = normalize(prev);
+      return normalized < minStart ? minStart : normalized;
+    });
+  }, [startDate, now]);
 
   function normalize(date: Date) {
     const d = new Date(date);
@@ -97,8 +147,6 @@ export default function AddTaskModal({
     d.setMinutes(d.getMinutes() + 1);
     return d;
   }
-
-  const [now, setNow] = useState(getNextMinute);
 
   useEffect(() => {
     const msToNextMinute = 60000 - (Date.now() % 60000);
@@ -188,11 +236,14 @@ export default function AddTaskModal({
                 />
               </View>
               <Text style={styles.label}>Start</Text>
-              <View style={{ flexDirection: "row" }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={styles.inputBox}
                   onPress={() => isAndroid && setShowStartDate(true)}
                 >
+                  <Text style={{ color: colors.textPrimary }}>
+                    {startDate.toDateString()}
+                  </Text>
                   {(!isAndroid || showStartDate) && (
                     <DateTimePicker
                       value={startDate}
@@ -206,9 +257,12 @@ export default function AddTaskModal({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={styles.inputBox}
                   onPress={() => isAndroid && setShowStartTime(true)}
                 >
+                  <Text style={{ color: colors.textPrimary }}>
+                    {formatTime(startTime)}
+                  </Text>
                   {(!isAndroid || showStartTime) && (
                     <DateTimePicker
                       value={startTime}
@@ -225,12 +279,16 @@ export default function AddTaskModal({
                   )}
                 </TouchableOpacity>
               </View>
+
               <Text style={styles.label}>Deadline</Text>
-              <View style={{ flexDirection: "row" }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={styles.inputBox}
                   onPress={() => isAndroid && setShowEndDate(true)}
                 >
+                  <Text style={{ color: colors.textPrimary }}>
+                    {endDate.toDateString()}
+                  </Text>
                   {(!isAndroid || showEndDate) && (
                     <DateTimePicker
                       value={endDate}
@@ -244,9 +302,12 @@ export default function AddTaskModal({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={styles.inputBox}
                   onPress={() => isAndroid && setShowEndTime(true)}
                 >
+                  <Text style={{ color: colors.textPrimary }}>
+                    {formatTime(endTime)}
+                  </Text>
                   {(!isAndroid || showEndTime) && (
                     <DateTimePicker
                       key={endTime.getTime()}

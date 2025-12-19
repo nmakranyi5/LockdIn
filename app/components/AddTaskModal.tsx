@@ -238,12 +238,14 @@ export default function AddTaskModal({
               <Text style={styles.label}>Start</Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  style={styles.inputBox}
+                  style={isAndroid ? styles.inputBox : undefined}
                   onPress={() => isAndroid && setShowStartDate(true)}
                 >
-                  <Text style={{ color: colors.textPrimary }}>
-                    {startDate.toDateString()}
-                  </Text>
+                  {isAndroid && (
+                    <Text style={{ color: colors.textPrimary }}>
+                      {formatDate(startDate)}
+                    </Text>
+                  )}
                   {(!isAndroid || showStartDate) && (
                     <DateTimePicker
                       value={startDate}
@@ -257,12 +259,14 @@ export default function AddTaskModal({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.inputBox}
-                  onPress={() => isAndroid && setShowStartTime(true)}
+                  style={isAndroid ? styles.inputBox : undefined}
+                  onPress={() => isAndroid && setShowStartDate(true)}
                 >
-                  <Text style={{ color: colors.textPrimary }}>
-                    {formatTime(startTime)}
-                  </Text>
+                  {isAndroid && (
+                    <Text style={{ color: colors.textPrimary }}>
+                      {formatDate(startTime)}
+                    </Text>
+                  )}
                   {(!isAndroid || showStartTime) && (
                     <DateTimePicker
                       value={startTime}
@@ -283,12 +287,14 @@ export default function AddTaskModal({
               <Text style={styles.label}>Deadline</Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
-                  style={styles.inputBox}
-                  onPress={() => isAndroid && setShowEndDate(true)}
+                  style={isAndroid ? styles.inputBox : undefined}
+                  onPress={() => isAndroid && setShowStartDate(true)}
                 >
-                  <Text style={{ color: colors.textPrimary }}>
-                    {endDate.toDateString()}
-                  </Text>
+                  {isAndroid && (
+                    <Text style={{ color: colors.textPrimary }}>
+                      {formatDate(endDate)}
+                    </Text>
+                  )}
                   {(!isAndroid || showEndDate) && (
                     <DateTimePicker
                       value={endDate}
@@ -302,12 +308,14 @@ export default function AddTaskModal({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.inputBox}
-                  onPress={() => isAndroid && setShowEndTime(true)}
+                  style={isAndroid ? styles.inputBox : undefined}
+                  onPress={() => isAndroid && setShowStartDate(true)}
                 >
-                  <Text style={{ color: colors.textPrimary }}>
-                    {formatTime(endTime)}
-                  </Text>
+                  {isAndroid && (
+                    <Text style={{ color: colors.textPrimary }}>
+                      {formatDate(endTime)}
+                    </Text>
+                  )}
                   {(!isAndroid || showEndTime) && (
                     <DateTimePicker
                       key={endTime.getTime()}

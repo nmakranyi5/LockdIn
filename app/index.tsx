@@ -377,9 +377,9 @@ export default function Index() {
       </View>
       <View
         style={{
-          marginTop: 20,
-          height: 500,
-          width: 300,
+          flex: 1,
+          width: "100%",
+          maxWidth: 360,
           borderWidth: 2,
           borderColor: colors.border,
           borderRadius: 20,
@@ -387,6 +387,7 @@ export default function Index() {
           backgroundColor: colors.card,
           justifyContent: "center",
           alignItems: "center",
+          paddingVertical: 20,
         }}
       >
         {isAddCard ? (
@@ -487,8 +488,10 @@ export default function Index() {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          width: 300,
+          width: "100%",
+          maxWidth: 360,
           marginTop: 16,
+          paddingHorizontal: 20,
         }}
       >
         <TouchableOpacity onPress={goLeft}>
@@ -516,7 +519,8 @@ export default function Index() {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          width: 200,
+          width: "50%",
+          maxWidth: 260,
           marginTop: 16,
         }}
       >

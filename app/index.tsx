@@ -378,16 +378,14 @@ export default function Index() {
       <View
         style={{
           flex: 1,
-          width: "100%",
-          maxWidth: 360,
-          borderWidth: 2,
-          borderColor: colors.border,
+          marginHorizontal: 20,
           borderRadius: 20,
+          borderWidth: 2,
           borderStyle: "dashed",
-          backgroundColor: colors.card,
+          borderColor: colors.border,
           justifyContent: "center",
           alignItems: "center",
-          paddingVertical: 20,
+          width: "90%",
         }}
       >
         {isAddCard ? (

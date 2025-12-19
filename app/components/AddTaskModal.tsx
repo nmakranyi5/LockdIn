@@ -260,11 +260,11 @@ export default function AddTaskModal({
 
                 <TouchableOpacity
                   style={isAndroid ? styles.inputBox : undefined}
-                  onPress={() => isAndroid && setShowStartDate(true)}
+                  onPress={() => isAndroid && setShowStartTime(true)}
                 >
                   {isAndroid && (
                     <Text style={{ color: colors.textPrimary }}>
-                      {formatDate(startTime)}
+                      {formatTime(startTime)}
                     </Text>
                   )}
                   {(!isAndroid || showStartTime) && (
@@ -288,7 +288,7 @@ export default function AddTaskModal({
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
                   style={isAndroid ? styles.inputBox : undefined}
-                  onPress={() => isAndroid && setShowStartDate(true)}
+                  onPress={() => isAndroid && setShowEndDate(true)}
                 >
                   {isAndroid && (
                     <Text style={{ color: colors.textPrimary }}>
@@ -309,11 +309,11 @@ export default function AddTaskModal({
 
                 <TouchableOpacity
                   style={isAndroid ? styles.inputBox : undefined}
-                  onPress={() => isAndroid && setShowStartDate(true)}
+                  onPress={() => isAndroid && setShowEndTime(true)}
                 >
                   {isAndroid && (
                     <Text style={{ color: colors.textPrimary }}>
-                      {formatDate(endTime)}
+                      {formatTime(endTime)}
                     </Text>
                   )}
                   {(!isAndroid || showEndTime) && (

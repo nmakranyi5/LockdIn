@@ -8,6 +8,7 @@ import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
 import ConfirmModal from "./components/ConfirmModal";
 import HelpHomeScreenModal from "./components/HelpHomeScreenModal";
+import SettingsModal from "./components/SettingsModal";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -397,10 +398,12 @@ export default function Index() {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setIsSettingsModalVisible(true)}
-        >
-          <Ionicons name="settings-outline" size={32} color={colors.textPrimary} />
+        <TouchableOpacity onPress={() => setIsSettingsModalVisible(true)}>
+          <Ionicons
+            name="settings-outline"
+            size={32}
+            color={colors.textPrimary}
+          />
         </TouchableOpacity>
       </View>
       <View style={{ paddingBottom: 20, paddingTop: 10 }}>
@@ -630,6 +633,11 @@ export default function Index() {
       <HelpHomeScreenModal
         isVisible={isHelpModalVisible}
         onClose={handleCloseHelp}
+      />
+
+      <SettingsModal
+        isVisible={isSettingsModalVisible}
+        onClose={() => setIsSettingsModalVisible(false)}
       />
     </SafeAreaView>
   );

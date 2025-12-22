@@ -269,6 +269,15 @@ export default function Index() {
     });
   };
 
+  const handleCloseHelp = async () => {
+    try {
+      await AsyncStorage.setItem("hasSeenHelp", "true");
+      setIsHelpModalVisible(false);
+    } catch (e) {
+      console.log("Error saving help modal flag", e);
+    }
+  };
+
   async function confirmAddPushNotification() {
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -344,6 +353,22 @@ export default function Index() {
       setCurrentIndex(tasks.length);
     }
   }, [tasks]);
+
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      try {
+        const hasSeenHelp = await AsyncStorage.getItem("hasSeenHelp");
+
+        if (!hasSeenHelp) {
+          setIsHelpModalVisible(true);
+        }
+      } catch (e) {
+        console.log("Error checking help modal flag", e);
+      }
+    };
+
+    checkFirstLaunch();
+  }, []);
 
   return (
     <SafeAreaView
@@ -580,9 +605,7 @@ export default function Index() {
 
       <HelpHomeScreenModal
         isVisible={isHelpModalVisible}
-        onClose={() => {
-          setIsHelpModalVisible(false);
-        }}
+        onClose={handleCloseHelp}
       />
     </SafeAreaView>
   );

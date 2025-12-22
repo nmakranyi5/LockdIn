@@ -4,6 +4,9 @@ import {
     Modal,
     Platform,
     StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
 import HelpTaskScreenModal from "./HelpTaskScreenModal";
@@ -24,7 +27,21 @@ export default function HelpHomeScreenModal({
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
-      ></KeyboardAvoidingView>
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.popup}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Welcome to LockdIn!</Text>
+            </View>
+            <View>
+
+            </View>
+            <TouchableOpacity style={styles.saveButton} onPress={onClose}>
+              <Text style={styles.saveButtonText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
       <HelpTaskScreenModal
         isVisible={isHelpModalVisible}
         onClose={() => {

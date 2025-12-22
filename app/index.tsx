@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../assets/colors/colors";
 import AddTaskModal from "./components/AddTaskModal";
 import ConfirmModal from "./components/ConfirmModal";
+import HelpHomeScreenModal from "./components/HelpHomeScreenModal";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -31,6 +32,7 @@ export default function Index() {
   };
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -573,6 +575,13 @@ export default function Index() {
         onConfirm={() => {
           setConfirmEndVisible(false);
           onEndTask();
+        }}
+      />
+
+      <HelpHomeScreenModal
+        isVisible={isHelpModalVisible}
+        onClose={() => {
+          setIsHelpModalVisible(false);
         }}
       />
     </SafeAreaView>

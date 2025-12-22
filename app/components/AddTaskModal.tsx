@@ -32,6 +32,7 @@ export default function AddTaskModal({
   const [endTime, setEndTime] = useState(new Date());
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
+  const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
 
   const isAndroid = Platform.OS === "android";
   const [showStartTime, setShowStartTime] = useState(!isAndroid);

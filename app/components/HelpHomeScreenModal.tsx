@@ -31,10 +31,13 @@ export default function HelpHomeScreenModal({
         <View style={styles.backdrop}>
           <View style={styles.popup}>
             <View style={styles.header}>
-              <Text style={styles.title}>Welcome to LockdIn!</Text>
+              <Text style={styles.title}>Welcome!</Text>
             </View>
-            <View>
-
+            <View style={styles.body}>
+                <Text style={styles.text}>With LockdIn, stay on top of your tasks and get things done.</Text>
+                <Text style={styles.text}>Use the arrows to switch tasks. Tap the pencil to edit or the trash to delete.</Text>
+                <Text style={styles.text}>Tap the ? to reopen this help screen, or the settings icon to manage the app.</Text>
+                <Text style={styles.text}>Hit the + button to create your first task and get started.</Text>
             </View>
             <TouchableOpacity style={styles.saveButton} onPress={onClose}>
               <Text style={styles.saveButtonText}>Confirm</Text>
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   body: {
-    marginTop: 12,
+    marginTop: 20,
     gap: 8,
   },
   saveButton: {
@@ -127,4 +130,11 @@ const styles = StyleSheet.create({
     outlineColor: "transparent",
     outlineWidth: 0,
   },
+  text: {
+    color: "#B5B5B8",
+    fontSize: 20,
+    fontWeight: "400",
+    lineHeight: 22,
+    marginBottom: 10,
+  }
 });

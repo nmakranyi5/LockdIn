@@ -33,6 +33,7 @@ export default function Index() {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -379,6 +380,29 @@ export default function Index() {
         alignItems: "center",
       }}
     >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "90%",
+          marginTop: 16,
+        }}
+      >
+        <TouchableOpacity onPress={() => setIsHelpModalVisible(true)}>
+          <Ionicons
+            name="help-circle-outline"
+            size={36}
+            color={colors.textPrimary}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setIsSettingsModalVisible(true)}
+        >
+          <Ionicons name="settings-outline" size={32} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
       <View style={{ paddingBottom: 20, paddingTop: 10 }}>
         <Text
           style={{

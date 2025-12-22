@@ -1,4 +1,5 @@
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
+import HelpTaskScreenModal from "./HelpTaskScreenModal";
 
 type AddTaskModalProps = {
   isVisible: boolean;
@@ -120,6 +122,31 @@ export default function AddTaskModal({
     return d;
   };
 
+  const handleCloseHelp = async () => {
+    try {
+      await AsyncStorage.setItem("hasSeenTaskHelp", "true");
+      setIsHelpModalVisible(false);
+    } catch (e) {
+      console.log("Error saving help modal flag", e);
+    }
+  };
+
+  useEffect(() => {
+    const checkFirstLaunch = async () => {
+      try {
+        const hasSeenTaskHelp = await AsyncStorage.getItem("hasSeenTaskHelp");
+
+        if (!hasSeenTaskHelp) {
+          setIsHelpModalVisible(true);
+        }
+      } catch (e) {
+        console.log("Error checking help modal flag", e);
+      }
+    };
+
+    checkFirstLaunch();
+  }, []);
+
   useEffect(() => {
     if (!isAndroid) return;
 
@@ -215,15 +242,25 @@ export default function AddTaskModal({
         <View style={styles.backdrop}>
           <View style={styles.popup}>
             <View style={styles.header}>
-              <Text style={styles.title}>
-                {initialTask ? "Edit Task" : "Add Task"}
-              </Text>
-              <MaterialIcons
-                name="close"
-                size={24}
-                color={colors.textMuted}
-                onPress={onClose}
-              />
+              <View style={styles.headerRow}>
+                <Text style={styles.title}>
+                  {initialTask ? "Edit Task" : "Add Task"}
+                </Text>
+                <TouchableOpacity onPress={() => setIsHelpModalVisible(true)}>
+                  <Ionicons
+                    name="help-circle-outline"
+                    size={24}
+                    color={colors.textPrimary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons
+                  name="close-outline"
+                  size={30}
+                  color={colors.textPrimary}
+                />
+              </TouchableOpacity>
             </View>
             <View style={styles.body}>
               <Text style={styles.label}>Task Name</Text>
@@ -236,6 +273,10 @@ export default function AddTaskModal({
                   onChangeText={setTitle}
                 />
               </View>
+              <Text style={styles.text}>
+                Note: The pickers automatically update to prevent the selection
+                of passed times and dates.
+              </Text>
               <Text style={styles.label}>Start</Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity
@@ -382,6 +423,10 @@ export default function AddTaskModal({
           </View>
         </View>
       </KeyboardAvoidingView>
+      <HelpTaskScreenModal
+        isVisible={isHelpModalVisible}
+        onClose={handleCloseHelp}
+      />
     </Modal>
   );
 }
@@ -405,8 +450,13 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   title: {
     fontSize: 22,
@@ -460,5 +510,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     outlineColor: "transparent",
     outlineWidth: 0,
+  },
+  text: {
+    color: "#B5B5B8",
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 22,
+    marginBottom: 10,
   },
 });

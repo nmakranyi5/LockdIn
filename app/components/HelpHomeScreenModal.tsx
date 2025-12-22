@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
     KeyboardAvoidingView,
     Modal,
@@ -9,7 +8,6 @@ import {
     View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
-import HelpTaskScreenModal from "./HelpTaskScreenModal";
 
 type HelpModalProps = {
   isVisible: boolean;
@@ -20,7 +18,6 @@ export default function HelpHomeScreenModal({
   isVisible,
   onClose,
 }: HelpModalProps) {
-  const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
 
   return (
     <Modal animationType="fade" transparent visible={isVisible}>
@@ -40,17 +37,11 @@ export default function HelpHomeScreenModal({
                 <Text style={styles.text}>Hit the + button to create your first task and get started.</Text>
             </View>
             <TouchableOpacity style={styles.saveButton} onPress={onClose}>
-              <Text style={styles.saveButtonText}>Confirm</Text>
+              <Text style={styles.saveButtonText}>Continue</Text>
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
-      <HelpTaskScreenModal
-        isVisible={isHelpModalVisible}
-        onClose={() => {
-          setIsHelpModalVisible(false);
-        }}
-      />
     </Modal>
   );
 }

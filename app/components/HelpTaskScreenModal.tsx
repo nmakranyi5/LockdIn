@@ -1,9 +1,11 @@
-import { useState } from "react";
 import {
     KeyboardAvoidingView,
     Modal,
     Platform,
     StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { colors } from "../../assets/colors/colors";
 
@@ -16,14 +18,36 @@ export default function HelpTaskScreenModal({
   isVisible,
   onClose,
 }: HelpModalProps) {
-  const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
-
   return (
     <Modal animationType="fade" transparent visible={isVisible}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
-      ></KeyboardAvoidingView>
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.popup}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Tasks</Text>
+            </View>
+            <View style={styles.body}>
+              <Text style={styles.text}>Here, you can manage a task.</Text>
+              <Text style={styles.text}>First, input a name for the task.</Text>
+              <Text style={styles.text}>
+                Next, set the start date and time using the pickers.
+              </Text>
+              <Text style={styles.text}>
+                Then, set the deadline date and time with the pickers.
+              </Text>
+              <Text style={styles.text}>
+                Finally, hit the save button to finish managing the task.
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.saveButton} onPress={onClose}>
+              <Text style={styles.saveButtonText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -76,7 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   body: {
-    marginTop: 12,
+    marginTop: 20,
     gap: 8,
   },
   saveButton: {
@@ -102,5 +126,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     outlineColor: "transparent",
     outlineWidth: 0,
+  },
+  text: {
+    color: "#B5B5B8",
+    fontSize: 20,
+    fontWeight: "400",
+    lineHeight: 22,
+    marginBottom: 10,
   },
 });

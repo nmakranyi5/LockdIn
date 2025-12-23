@@ -4,7 +4,7 @@
     "slug": "LockdIn",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/lockdin-transparent-1024x1024.png",
+    "icon": "./assets/images/lockdin-dark-1024x1024.png",
     "scheme": "lockdin",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,

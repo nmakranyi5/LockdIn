@@ -534,6 +534,21 @@ export default function Index() {
                       <Text style={styles.startButtonText}>End Task</Text>
                     </TouchableOpacity>
                   )}
+                  {task.completedAt && (
+                    <TouchableOpacity
+                      style={[
+                        styles.startButton,
+                      ]}
+                      onPress={() => {
+                        setEditingIndex(currentIndex);
+                        setIsModalVisible(true);
+                      }}
+                    >
+                      <Text style={styles.startButtonText}>
+                        Reschedule Task
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })()}

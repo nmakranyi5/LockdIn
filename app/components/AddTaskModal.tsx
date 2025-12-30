@@ -360,7 +360,6 @@ export default function AddTaskModal({
                   )}
                   {(!isAndroid || showEndTime) && (
                     <DateTimePicker
-                      key={endTime.getTime()}
                       value={endTime}
                       mode="time"
                       display={isAndroid ? "clock" : "default"}

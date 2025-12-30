@@ -477,7 +477,13 @@ export default function Index() {
               }
 
               return (
-                <>
+                <View
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flex: 1,
+                  }}
+                >
                   <Text
                     style={{
                       color: colors.textPrimary,
@@ -517,7 +523,6 @@ export default function Index() {
                       <Text style={styles.startButtonText}>Start Task</Text>
                     </TouchableOpacity>
                   )}
-
                   {task.startedAt && !task.completedAt && (
                     <TouchableOpacity
                       style={[
@@ -529,7 +534,7 @@ export default function Index() {
                       <Text style={styles.startButtonText}>End Task</Text>
                     </TouchableOpacity>
                   )}
-                </>
+                </View>
               );
             })()}
           </>

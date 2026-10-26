@@ -21,9 +21,11 @@ import {
   nextOccurrence,
   priorityOf,
   repeatOf,
+  seriesKey,
   startOfDay,
   Task,
 } from "../components/taskState";
+import DeleteRepeatModal from "../components/DeleteRepeatModal";
 import Button from "../components/ui/Button";
 import IconButton from "../components/ui/IconButton";
 import AddTaskModal from "./components/AddTaskModal";
@@ -104,7 +106,6 @@ export default function Index() {
         ...fields,
         startedAt: keepRunning ? old.startedAt : null,
         completedAt: null,
-        spawnedNext: old.completedAt ? false : old.spawnedNext,
       });
       setEditingId(null);
       confirmEditPushNotification();
@@ -129,9 +130,26 @@ export default function Index() {
     setIsModalVisible(true);
   };
 
-  const onDelete = (id: string) => {
-    cancelTaskNotifications(findTask(id));
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+  const onDelete = (id: string, scope: "one" | "all" = "one") => {
+    const task = findTask(id);
+    if (!task) return;
+
+    if (scope === "all") {
+      const key = seriesKey(task);
+      tasks
+        .filter((t) => seriesKey(t) === key)
+        .forEach((t) => cancelTaskNotifications(t));
+      setTasks((prev) => prev.filter((t) => seriesKey(t) !== key));
+      return;
+    }
+
+    cancelTaskNotifications(task);
+    if (repeatOf(task) !== "none" && !task.spawnedNext) {
+      // Keep the series going: line up the next occurrence as this one goes.
+      spawnNext(task, true);
+    } else {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    }
   };
 
   const onStartTask = (id: string) => {
@@ -228,17 +246,19 @@ export default function Index() {
     AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }, [tasks, loaded]);
 
-  const spawnNext = async (task: Task) => {
+  const spawnNext = async (task: Task, removeSource = false) => {
     spawning.current.add(task.id);
     const occurrence = nextOccurrence(task, Date.now());
     if (!occurrence) {
-      updateTask(task.id, { spawnedNext: true });
+      if (removeSource) setTasks((prev) => prev.filter((t) => t.id !== task.id));
+      else updateTask(task.id, { spawnedNext: true });
       return;
     }
     const sched = await scheduleTaskNotifications({ ...task, ...occurrence });
     const next: Task = {
       ...task,
       id: newId(),
+      seriesId: seriesKey(task),
       startDate: sched.startDate,
       endDate: sched.endDate,
       startNotificationId: sched.startNotificationId,
@@ -256,7 +276,13 @@ export default function Index() {
         return prev;
       }
       return [
-        ...prev.map((t) => (t.id === task.id ? { ...t, spawnedNext: true } : t)),
+        ...(removeSource
+          ? prev.filter((t) => t.id !== task.id)
+          : prev.map((t) =>
+              t.id === task.id
+                ? { ...t, seriesId: seriesKey(task), spawnedNext: true }
+                : t
+            )),
         next,
       ];
     });
@@ -291,6 +317,12 @@ export default function Index() {
 
     checkFirstLaunch();
   }, []);
+
+  const deleteTask = findTask(deleteId);
+  const deleteIsRepeating = !!deleteTask && repeatOf(deleteTask) !== "none";
+  const deleteSeriesCount = deleteTask
+    ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
+    : 0;
 
   const today = startOfDay(new Date(now));
   const isPast = selectedDay.getTime() < today.getTime();
@@ -453,13 +485,28 @@ export default function Index() {
       />
 
       <ConfirmModal
-        visible={deleteId !== null}
+        visible={deleteId !== null && !deleteIsRepeating}
         title="Delete Task?"
         message="This action cannot be undone."
         confirmText="Delete"
         onCancel={() => setDeleteId(null)}
         onConfirm={() => {
           if (deleteId !== null) onDelete(deleteId);
+          setDeleteId(null);
+        }}
+      />
+
+      <DeleteRepeatModal
+        visible={deleteId !== null && deleteIsRepeating}
+        repeat={deleteTask ? repeatOf(deleteTask) : "none"}
+        count={deleteSeriesCount}
+        onCancel={() => setDeleteId(null)}
+        onDeleteOne={() => {
+          if (deleteId !== null) onDelete(deleteId, "one");
+          setDeleteId(null);
+        }}
+        onDeleteAll={() => {
+          if (deleteId !== null) onDelete(deleteId, "all");
           setDeleteId(null);
         }}
       />

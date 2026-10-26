@@ -16,6 +16,7 @@ export type Task = {
   repeats?: string;
   items?: ChecklistItem[];
   spawnedNext?: boolean;
+  seriesId?: string;
   startNotificationId?: string;
   deadlineNotificationId?: string;
   reminderNotificationId?: string;
@@ -31,6 +32,9 @@ export const repeatOf = (t: Task): Repeat => {
     ? r
     : "none";
 };
+
+// All occurrences of a repeating task share a series key.
+export const seriesKey = (t: Task) => t.seriesId ?? t.id;
 
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

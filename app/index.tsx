@@ -1,13 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
+import CheckInModal from "../components/CheckInModal";
 import DayStrip from "../components/DayStrip";
+import ProfileModal from "../components/ProfileModal";
+import ProfileBubble from "../components/ProfileBubble";
+import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
+  scheduleCheckInNotifications,
   scheduleDeadlineNotification,
   scheduleTaskNotifications,
 } from "../components/scheduleTask";
@@ -16,7 +29,11 @@ import { priorityRank } from "../components/taskMeta";
 import {
   addDays,
   ChecklistItem,
+  CHECK_IN_INTERVAL_MIN,
   getTaskState,
+  humanDuration,
+  isCheckInDue,
+  isEarlyFinish,
   isSameDay,
   newId,
   nextOccurrence,
@@ -51,12 +68,14 @@ type TaskInput = {
   kind: Task["kind"];
   priority: Task["priority"];
   items: ChecklistItem[];
+  estimateMinutes?: number;
 };
 
 export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
@@ -88,6 +107,14 @@ export default function Index() {
     // is being rescheduled and starts fresh.
     const keepRunning = !!old && !!old.startedAt && !old.completedAt;
     const sched = await scheduleTaskNotifications(input, keepRunning);
+    const estimateMinutes =
+      input.kind === "timer" ? input.estimateMinutes : undefined;
+    // A running task keeps its start, so line its check-ins up with the
+    // (possibly new) estimate.
+    const checkIns =
+      keepRunning && estimateMinutes && old?.startedAt
+        ? await scheduleCheckInNotifications({ title: input.title, estimateMinutes }, old.startedAt)
+        : undefined;
 
     const fields = {
       title: input.title,
@@ -97,6 +124,9 @@ export default function Index() {
       kind: input.kind,
       priority: input.priority,
       items: input.items,
+      estimateMinutes,
+      checkInNotificationIds: checkIns,
+      nextCheckInAt: undefined,
       startNotificationId: sched.startNotificationId,
       deadlineNotificationId: sched.deadlineNotificationId,
       reminderNotificationId: undefined,
@@ -156,7 +186,13 @@ export default function Index() {
     const task = findTask(id);
     if (!task || task.startedAt) return;
     cancelTaskNotifications(task, "start", "reminders");
-    updateTask(id, { startedAt: Date.now() });
+    const startedAt = Date.now();
+    updateTask(id, { startedAt });
+    if (task.estimateMinutes) {
+      scheduleCheckInNotifications(task, startedAt).then((ids) =>
+        updateTask(id, { checkInNotificationIds: ids })
+      );
+    }
   };
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
@@ -257,6 +293,8 @@ export default function Index() {
       startedAt: null,
       completedAt: null,
       spawnedNext: false,
+      checkInNotificationIds: undefined,
+      nextCheckInAt: undefined,
       items: task.items?.map((i) => ({ ...i, done: false })),
     };
     setTasks((prev) => {
@@ -314,6 +352,23 @@ export default function Index() {
     ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
     : 0;
 
+  const { profile, setProfile, stats, todayKey } = useProfile(tasks, loaded, now);
+
+  const endTask = findTask(endId);
+  const endsEarly = !!endTask && isEarlyFinish(endTask, now);
+
+  const anyModalOpen =
+    isModalVisible ||
+    isHelpModalVisible ||
+    isSettingsModalVisible ||
+    isProfileVisible ||
+    deleteId !== null ||
+    endId !== null;
+  // Only one prompt at a time, and never stacked on top of another dialog.
+  const checkInTask = anyModalOpen
+    ? undefined
+    : tasks.find((t) => isCheckInDue(t, now));
+
   const today = startOfDay(new Date(now));
   const isPast = selectedDay.getTime() < today.getTime();
 
@@ -366,24 +421,20 @@ export default function Index() {
     setIsModalVisible(true);
   };
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.column}>
-      <View style={styles.topBar}>
-        <IconButton
-          name="help-outline"
-          onPress={() => setIsHelpModalVisible(true)}
-        />
-        <Text style={styles.brandName}>LockdIn</Text>
-        <IconButton
-          name="settings-outline"
-          onPress={() => setIsSettingsModalVisible(true)}
-        />
-      </View>
+  // On short screens (landscape phones) the day header scrolls with the list
+  // so the tasks get the room.
+  const { height: windowHeight } = useWindowDimensions();
+  // Decided after mount so the static web pre-render (height 0) matches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const compact = mounted && windowHeight < 600;
 
+  const dayHeader = (
+    <>
       <View style={styles.dayHeader}>
         <IconButton
           name="chevron-back"
+          label="Previous day"
           size={18}
           onPress={() => setSelectedDay((d) => addDays(d, -1))}
         />
@@ -393,6 +444,7 @@ export default function Index() {
         </View>
         <IconButton
           name="chevron-forward"
+          label="Next day"
           size={18}
           onPress={() => setSelectedDay((d) => addDays(d, 1))}
         />
@@ -413,12 +465,56 @@ export default function Index() {
           <Text style={styles.jumpText}>Back to today</Text>
         </TouchableOpacity>
       )}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.column}>
+      <View style={styles.topBar}>
+        <View style={[styles.topSide, { alignItems: "flex-start" }]}>
+          <IconButton
+            name="settings-outline"
+            label="Settings"
+            size={18}
+            onPress={() => setIsSettingsModalVisible(true)}
+          />
+        </View>
+        <Text style={styles.brandName} numberOfLines={1}>
+          LockdIn
+        </Text>
+        <View style={[styles.topSide, styles.topRight]}>
+          <ProfileBubble
+            avatar={profile.avatar}
+            streak={stats.current}
+            lit={stats.today === "complete"}
+            onPress={() => setIsProfileVisible(true)}
+          />
+        </View>
+      </View>
+
+      {!compact && dayHeader}
 
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
+        {compact && dayHeader}
+        {isSameDay(selectedDay, today) &&
+          dayTasks.length > 0 &&
+          stats.today === "complete" && (
+            <View style={styles.banner}>
+              <Ionicons name="flame" size={22} color={colors.streak} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerTitle}>All done for today</Text>
+                <Text style={styles.bannerSub}>
+                  {stats.current} day{stats.current === 1 ? "" : "s"} streak
+                </Text>
+              </View>
+            </View>
+          )}
+
         {dayTasks.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyCircle}>
@@ -503,13 +599,37 @@ export default function Index() {
 
       <ConfirmModal
         visible={endId !== null}
-        title="End Task?"
-        message="Are you sure that the task is done? Be honest. 🙏"
-        confirmText="End Task"
+        title={endsEarly ? "Finished early?" : "End Task?"}
+        message={
+          endsEarly && endTask?.startedAt && endTask.estimateMinutes
+            ? `You've worked ${humanDuration(
+                now - endTask.startedAt
+              )} of your ${humanDuration(
+                endTask.estimateMinutes * 60_000
+              )} estimate. Did you really finish the task?`
+            : "Are you sure that the task is done? Be honest. 🙏"
+        }
+        confirmText={endsEarly ? "Yes, it's done" : "End Task"}
+        cancelText={endsEarly ? "Not yet" : "Cancel"}
+        confirmVariant={endsEarly ? "primary" : "danger"}
         onCancel={() => setEndId(null)}
         onConfirm={() => {
           if (endId !== null) completeTask(endId);
           setEndId(null);
+        }}
+      />
+
+      <CheckInModal
+        task={checkInTask}
+        now={now}
+        onStillWorking={() => {
+          if (checkInTask)
+            updateTask(checkInTask.id, {
+              nextCheckInAt: Date.now() + CHECK_IN_INTERVAL_MIN * 60_000,
+            });
+        }}
+        onDone={() => {
+          if (checkInTask) completeTask(checkInTask.id);
         }}
       />
 
@@ -522,6 +642,16 @@ export default function Index() {
         isVisible={isSettingsModalVisible}
         onClose={() => setIsSettingsModalVisible(false)}
       />
+
+      <ProfileModal
+        visible={isProfileVisible}
+        onClose={() => setIsProfileVisible(false)}
+        profile={profile}
+        onChange={setProfile}
+        stats={stats}
+        todayKey={todayKey}
+      />
+
       </View>
     </SafeAreaView>
   );
@@ -545,7 +675,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 8,
   },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.streakSoft,
+    borderWidth: 1,
+    borderColor: colors.streak,
+  },
+  bannerTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
+  bannerSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  // Both sides take equal space so the title sits dead centre.
+  topSide: { flex: 1, minWidth: 0 },
+  topRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+  },
   brandName: {
+    flexShrink: 1,
+    textAlign: "center",
+    marginHorizontal: 8,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.4,

@@ -17,6 +17,11 @@ export type Task = {
   items?: ChecklistItem[];
   spawnedNext?: boolean;
   seriesId?: string;
+  // Timer tasks: how long the person expects the work to take.
+  estimateMinutes?: number;
+  checkInNotificationIds?: string[];
+  // When the next "still working?" prompt is due (set when snoozed).
+  nextCheckInAt?: number;
   startNotificationId?: string;
   deadlineNotificationId?: string;
   reminderNotificationId?: string; // legacy single repeating reminder
@@ -45,6 +50,7 @@ export type TaskState = {
   timeMs: number;
   valueText?: string;
   isOverdue: boolean;
+  isOvertime: boolean;
   isDone: boolean;
   progress: number | null;
   status: { text: string; color: string; bg: string };
@@ -88,6 +94,7 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
   let timeMs = 0;
   let valueText: string | undefined;
   let isOverdue = false;
+  let isOvertime = false;
   let isDone = false;
   let status = {
     text: "Upcoming",
@@ -105,6 +112,24 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
       label = "Completed at";
       valueText = formatClock(new Date(task.completedAt));
     }
+  } else if (kind === "timer" && task.startedAt && task.estimateMinutes) {
+    // Running against an estimate: count it down, then count the overtime up.
+    const estimateMs = task.estimateMinutes * 60_000;
+    const elapsed = Math.max(0, nowMs - task.startedAt);
+    isOverdue = nowMs >= endMs;
+    isOvertime = elapsed >= estimateMs;
+    if (isOvertime) {
+      label = "Over estimate by";
+      timeMs = elapsed - estimateMs;
+    } else {
+      label = "Estimate remaining";
+      timeMs = estimateMs - elapsed;
+    }
+    status = isOverdue
+      ? { text: "Overdue", color: colors.danger, bg: colors.dangerSoft }
+      : isOvertime
+      ? { text: "Overtime", color: colors.warning, bg: colors.warningSoft }
+      : { text: "In progress", color: colors.highlight, bg: colors.accentSoft };
   } else if (!task.startedAt && nowMs < startMs) {
     label = "Starts in";
     timeMs = Math.max(0, startMs - nowMs);
@@ -130,15 +155,24 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
 
   let progress: number | null = null;
   if (kind === "timer" && task.startedAt && !task.completedAt) {
-    progress = Math.min(
-      1,
-      Math.max(0, (nowMs - task.startedAt) / Math.max(1, endMs - task.startedAt))
-    );
+    const span = task.estimateMinutes
+      ? task.estimateMinutes * 60_000
+      : endMs - task.startedAt;
+    progress = Math.min(1, Math.max(0, (nowMs - task.startedAt) / Math.max(1, span)));
   } else if (kind === "checklist" && items.length > 0) {
     progress = checked / items.length;
   }
 
-  return { label, timeMs, valueText, isOverdue, isDone, progress, status };
+  return {
+    label,
+    timeMs,
+    valueText,
+    isOverdue,
+    isOvertime,
+    isDone,
+    progress,
+    status,
+  };
 }
 
 const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
@@ -176,4 +210,32 @@ export function nextOccurrence(task: Task, nowMs: number) {
     }
   }
   return null;
+}
+
+export const CHECK_IN_INTERVAL_MIN = 15;
+// A finish this far under the estimate gets a "did you really finish?" prompt.
+export const EARLY_FINISH_RATIO = 0.8;
+
+// A running timer task is due a "still working?" check-in once it passes its
+// estimate, and again every CHECK_IN_INTERVAL_MIN after the person snoozes it.
+export function isCheckInDue(task: Task, nowMs: number) {
+  if (kindOf(task) !== "timer" || !task.estimateMinutes) return false;
+  if (!task.startedAt || task.completedAt) return false;
+  const due = task.nextCheckInAt ?? task.startedAt + task.estimateMinutes * 60_000;
+  return nowMs >= due;
+}
+
+export function isEarlyFinish(task: Task, nowMs: number) {
+  if (!task.startedAt || !task.estimateMinutes) return false;
+  return nowMs - task.startedAt < task.estimateMinutes * 60_000 * EARLY_FINISH_RATIO;
+}
+
+// "1h 20m", "45m", "under a minute"
+export function humanDuration(ms: number) {
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return "under a minute";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h && m) return `${h}h ${m}m`;
+  return h ? `${h}h` : `${m}m`;
 }

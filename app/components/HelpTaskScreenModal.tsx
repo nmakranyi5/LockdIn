@@ -23,7 +23,7 @@ export default function HelpTaskScreenModal({
           "First, input a name and pick a type: Timer, Checklist, or One & done.",
           "Next, set the start date and time using the pickers.",
           "Then, set the deadline date and time with the pickers.",
-          "Set a priority and optionally a repeat, then hit save.",
+          "Set a priority and repeat if you like. Timer tasks can take an estimate: you'll be asked to confirm an early finish, and checked in on if you run over.",
         ]}
       />
     </ModalCard>

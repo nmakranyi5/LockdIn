@@ -15,12 +15,16 @@ user can only read and write their own rows), and adds the `delete_my_account()`
 
 ## 2. Add your keys to the app
 
-```bash
-cp .env.example .env
+Create a file named `.env` in the project root (it is gitignored) with:
+
+```
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-KEY
 ```
 
-Fill in `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` from
-**Project Settings → API**. Restart Expo (`npx expo start -c`) after changing them.
+Take both values from **Project Settings → API**. Use the **anon / public** key only, never the
+`service_role` key. Put real values in `.env`, not in any tracked file such as `.env.example`.
+Restart Expo (`npx expo start -c`) after changing them.
 
 Without these the app runs local-only (no sign-in screen), as it did before.
 

@@ -14,10 +14,9 @@ await db.exec(`
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create role anon nologin; create role authenticated nologin;
   grant usage on schema public, auth to anon, authenticated;
-  alter default privileges in schema public grant all on tables to anon, authenticated;
-  alter default privileges in schema public grant execute on functions to anon, authenticated;
 `);
 await db.exec(fs.readFileSync(new URL('../migrations/20260101000000_init.sql', import.meta.url), 'utf8'));
+if (process.env.INIT_ONLY !== '1') await db.exec(fs.readFileSync(new URL('../migrations/20260101000100_grants.sql', import.meta.url), 'utf8'));
 console.log('ok   migration applies cleanly');
 
 const as = async (uid, fn) => {           // run as an authenticated user
@@ -52,7 +51,7 @@ ok('two users can use the same task id', (await db.query(`select count(*)::int c
 
 // anonymous
 await db.exec(`set role anon`);
-ok('anon sees nothing', (await db.query(`select * from public.tasks`)).rows.length === 0);
+await fails('anon cannot even read tasks (no table privileges)', db.query(`select * from public.tasks`));
 await fails('anon cannot insert', db.exec(`insert into public.tasks (user_id, id, start_at, end_at) values ('${A}', 'x', now(), now())`));
 await db.exec(`reset role`);
 
@@ -85,8 +84,8 @@ await fails('profile name length capped', as(A, () => db.exec(`update public.pro
 await as(A, () => db.exec(`insert into public.day_history (day, total, done) values ('2026-10-25', 3, 3)`));
 await fails('history: done cannot exceed total', as(A, () => db.exec(`insert into public.day_history (day, total, done) values ('2026-10-24', 1, 2)`)));
 await fails('history: duplicate day rejected', as(A, () => db.exec(`insert into public.day_history (day, total, done) values ('2026-10-25', 1, 1)`)));
-ok('history cannot be edited', (await as(A, () => db.query(`update public.day_history set done=0 where day='2026-10-25' returning day`))).rows.length === 0);
-ok('history cannot be deleted', (await as(A, () => db.query(`delete from public.day_history where day='2026-10-25' returning day`))).rows.length === 0);
+await fails('history cannot be edited', as(A, () => db.query(`update public.day_history set done=0 where day='2026-10-25' returning day`)));
+await fails('history cannot be deleted', as(A, () => db.query(`delete from public.day_history where day='2026-10-25' returning day`)));
 ok('B cannot read A\'s history', (await as(B, () => db.query(`select * from public.day_history`))).rows.length === 0);
 
 // account deletion

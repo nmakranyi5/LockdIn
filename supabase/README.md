@@ -2,9 +2,13 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query**, paste the contents of
-[`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql) and run it once.
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`.)
+In the Supabase dashboard open **SQL Editor → New query** and run these two files, in order, once each:
+
+1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
+2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
+   Skipping this gives `permission denied for table profiles` in the app.
+
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs both.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.

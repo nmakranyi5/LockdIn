@@ -13,6 +13,9 @@ export function friendlyError(e: { message?: string; code?: string } | null | un
     return "That password is too weak. Use at least 6 characters.";
   if (/rate limit|too many/i.test(msg) || code === "over_email_send_rate_limit")
     return "Too many attempts. Please wait a minute and try again.";
+  // Postgres lacks table privileges: the SQL setup is incomplete.
+  if (/permission denied for (table|function|schema)/i.test(msg))
+    return "The database isn't fully set up yet. Run both SQL files in supabase/migrations (see supabase/README.md).";
   if (/network|failed to fetch|fetch failed|load failed|timed out/i.test(msg))
     return "Can't reach the server. Check your connection and try again.";
   return msg || "Something went wrong. Please try again.";

@@ -124,7 +124,7 @@ export default function SettingsModal({
         <View style={styles.devNote}>
           <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
           <Text style={styles.devNoteText}>
-            Supabase isn't configured, so there's no sign-in and data stays on this device. Add
+            Supabase is not configured, so there is no sign-in and data stays on this device. Add
             EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file, then
             restart with npx expo start -c.
           </Text>

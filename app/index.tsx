@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
+import CheckInModal from "../components/CheckInModal";
 import DayStrip from "../components/DayStrip";
 import ProfileModal from "../components/ProfileModal";
 import StreakChip from "../components/StreakChip";
@@ -19,6 +20,7 @@ import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
+  scheduleCheckInNotifications,
   scheduleDeadlineNotification,
   scheduleTaskNotifications,
 } from "../components/scheduleTask";
@@ -27,7 +29,11 @@ import { priorityRank } from "../components/taskMeta";
 import {
   addDays,
   ChecklistItem,
+  CHECK_IN_INTERVAL_MIN,
   getTaskState,
+  humanDuration,
+  isCheckInDue,
+  isEarlyFinish,
   isSameDay,
   newId,
   nextOccurrence,
@@ -62,6 +68,7 @@ type TaskInput = {
   kind: Task["kind"];
   priority: Task["priority"];
   items: ChecklistItem[];
+  estimateMinutes?: number;
 };
 
 export default function Index() {
@@ -100,6 +107,14 @@ export default function Index() {
     // is being rescheduled and starts fresh.
     const keepRunning = !!old && !!old.startedAt && !old.completedAt;
     const sched = await scheduleTaskNotifications(input, keepRunning);
+    const estimateMinutes =
+      input.kind === "timer" ? input.estimateMinutes : undefined;
+    // A running task keeps its start, so line its check-ins up with the
+    // (possibly new) estimate.
+    const checkIns =
+      keepRunning && estimateMinutes && old?.startedAt
+        ? await scheduleCheckInNotifications({ title: input.title, estimateMinutes }, old.startedAt)
+        : undefined;
 
     const fields = {
       title: input.title,
@@ -109,6 +124,9 @@ export default function Index() {
       kind: input.kind,
       priority: input.priority,
       items: input.items,
+      estimateMinutes,
+      checkInNotificationIds: checkIns,
+      nextCheckInAt: undefined,
       startNotificationId: sched.startNotificationId,
       deadlineNotificationId: sched.deadlineNotificationId,
       reminderNotificationId: undefined,
@@ -168,7 +186,13 @@ export default function Index() {
     const task = findTask(id);
     if (!task || task.startedAt) return;
     cancelTaskNotifications(task, "start", "reminders");
-    updateTask(id, { startedAt: Date.now() });
+    const startedAt = Date.now();
+    updateTask(id, { startedAt });
+    if (task.estimateMinutes) {
+      scheduleCheckInNotifications(task, startedAt).then((ids) =>
+        updateTask(id, { checkInNotificationIds: ids })
+      );
+    }
   };
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
@@ -269,6 +293,8 @@ export default function Index() {
       startedAt: null,
       completedAt: null,
       spawnedNext: false,
+      checkInNotificationIds: undefined,
+      nextCheckInAt: undefined,
       items: task.items?.map((i) => ({ ...i, done: false })),
     };
     setTasks((prev) => {
@@ -327,6 +353,21 @@ export default function Index() {
     : 0;
 
   const { profile, setProfile, stats, todayKey } = useProfile(tasks, loaded, now);
+
+  const endTask = findTask(endId);
+  const endsEarly = !!endTask && isEarlyFinish(endTask, now);
+
+  const anyModalOpen =
+    isModalVisible ||
+    isHelpModalVisible ||
+    isSettingsModalVisible ||
+    isProfileVisible ||
+    deleteId !== null ||
+    endId !== null;
+  // Only one prompt at a time, and never stacked on top of another dialog.
+  const checkInTask = anyModalOpen
+    ? undefined
+    : tasks.find((t) => isCheckInDue(t, now));
 
   const today = startOfDay(new Date(now));
   const isPast = selectedDay.getTime() < today.getTime();
@@ -570,13 +611,37 @@ export default function Index() {
 
       <ConfirmModal
         visible={endId !== null}
-        title="End Task?"
-        message="Are you sure that the task is done? Be honest. 🙏"
-        confirmText="End Task"
+        title={endsEarly ? "Finished early?" : "End Task?"}
+        message={
+          endsEarly && endTask?.startedAt && endTask.estimateMinutes
+            ? `You've worked ${humanDuration(
+                now - endTask.startedAt
+              )} of your ${humanDuration(
+                endTask.estimateMinutes * 60_000
+              )} estimate. Did you really finish the task?`
+            : "Are you sure that the task is done? Be honest. 🙏"
+        }
+        confirmText={endsEarly ? "Yes, it's done" : "End Task"}
+        cancelText={endsEarly ? "Not yet" : "Cancel"}
+        confirmVariant={endsEarly ? "primary" : "danger"}
         onCancel={() => setEndId(null)}
         onConfirm={() => {
           if (endId !== null) completeTask(endId);
           setEndId(null);
+        }}
+      />
+
+      <CheckInModal
+        task={checkInTask}
+        now={now}
+        onStillWorking={() => {
+          if (checkInTask)
+            updateTask(checkInTask.id, {
+              nextCheckInAt: Date.now() + CHECK_IN_INTERVAL_MIN * 60_000,
+            });
+        }}
+        onDone={() => {
+          if (checkInTask) completeTask(checkInTask.id);
         }}
       />
 

@@ -8,6 +8,7 @@ type ConfirmModalProps = {
   title: string;
   message: string;
   confirmText?: string;
+  confirmVariant?: "danger" | "primary";
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
@@ -18,6 +19,7 @@ export default function ConfirmModal({
   title,
   message,
   confirmText = "Confirm",
+  confirmVariant = "danger",
   cancelText = "Cancel",
   onConfirm,
   onCancel,
@@ -37,7 +39,7 @@ export default function ConfirmModal({
           />
           <Button
             label={confirmText}
-            variant="danger"
+            variant={confirmVariant}
             onPress={onConfirm}
             style={styles.action}
           />

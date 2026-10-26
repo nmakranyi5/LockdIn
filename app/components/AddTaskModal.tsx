@@ -33,6 +33,20 @@ import {
 } from "../../components/taskState";
 import HelpTaskScreenModal from "./HelpTaskScreenModal";
 
+const ESTIMATE_PRESETS = [
+  { minutes: 15, label: "15m" },
+  { minutes: 30, label: "30m" },
+  { minutes: 45, label: "45m" },
+  { minutes: 60, label: "1h" },
+  { minutes: 120, label: "2h" },
+];
+
+const ESTIMATE_OPTIONS = [
+  { value: "none", label: "None" },
+  ...ESTIMATE_PRESETS.map((p) => ({ value: String(p.minutes), label: p.label })),
+  { value: "custom", label: "Custom" },
+];
+
 type AddTaskModalProps = {
   isVisible: boolean;
   onClose: () => void;
@@ -54,6 +68,9 @@ export default function AddTaskModal({
   const [priority, setPriority] = useState<Priority>("normal");
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [itemsError, setItemsError] = useState(false);
+  const [estimateKey, setEstimateKey] = useState<string>("none");
+  const [customMinutes, setCustomMinutes] = useState("");
+  const [estimateError, setEstimateError] = useState(false);
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [startDate, setStartDate] = useState(new Date());
@@ -70,7 +87,20 @@ export default function AddTaskModal({
     if (!isVisible) return;
 
     setItemsError(false);
+    setEstimateError(false);
     lastDuration.current = 60 * 60_000;
+
+    const est: number | undefined = initialTask?.estimateMinutes;
+    if (!est) {
+      setEstimateKey("none");
+      setCustomMinutes("");
+    } else if (ESTIMATE_PRESETS.some((p) => p.minutes === est)) {
+      setEstimateKey(String(est));
+      setCustomMinutes("");
+    } else {
+      setEstimateKey("custom");
+      setCustomMinutes(String(est));
+    }
 
     if (initialTask) {
       const wasDone = !!initialTask.completedAt;
@@ -336,6 +366,16 @@ export default function AddTaskModal({
   };
 
   const handleSave = () => {
+    let estimateMinutes: number | undefined;
+    if (kind === "timer" && estimateKey !== "none") {
+      estimateMinutes =
+        estimateKey === "custom" ? parseInt(customMinutes, 10) : Number(estimateKey);
+      if (!estimateMinutes || estimateMinutes < 1 || estimateMinutes > 1440) {
+        setEstimateError(true);
+        return;
+      }
+    }
+
     const cleanItems =
       kind === "checklist" ? items.filter((i) => i.text.trim()) : [];
     if (kind === "checklist" && cleanItems.length === 0) {
@@ -362,6 +402,7 @@ export default function AddTaskModal({
       repeats,
       kind,
       priority,
+      estimateMinutes,
       items: cleanItems.map((i) => ({ ...i, text: i.text.trim() })),
     });
 
@@ -421,6 +462,45 @@ export default function AddTaskModal({
       <Text style={[styles.hint, { marginTop: 8 }]}>
         {KIND_OPTIONS.find((o) => o.value === kind)?.hint}
       </Text>
+
+      {kind === "timer" && (
+        <>
+          <Text style={styles.label}>Estimated time</Text>
+          <Chips
+            options={ESTIMATE_OPTIONS}
+            value={estimateKey}
+            onChange={(k) => {
+              setEstimateKey(k);
+              setEstimateError(false);
+            }}
+          />
+          {estimateKey === "custom" && (
+            <View style={[styles.field, styles.estimateField]}>
+              <TextInput
+                value={customMinutes}
+                onChangeText={(t) => {
+                  setCustomMinutes(t.replace(/[^0-9]/g, ""));
+                  setEstimateError(false);
+                }}
+                placeholder="Minutes"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={4}
+                style={[styles.input, { flex: 1, minWidth: 0 }]}
+              />
+              <Text style={styles.unit}>min</Text>
+            </View>
+          )}
+          {estimateError && (
+            <Text style={styles.error}>Enter an estimate between 1 and 1440 minutes.</Text>
+          )}
+          <Text style={[styles.hint, { marginTop: 8 }]}>
+            {estimateKey === "none"
+              ? "Optional. With an estimate you'll be asked to confirm if you finish early, and get check-ins if you run over."
+              : "You'll be asked to confirm if you finish early, and get check-ins if you run over."}
+          </Text>
+        </>
+      )}
 
       {kind === "checklist" && (
         <View style={styles.checklist}>
@@ -641,6 +721,8 @@ const styles = StyleSheet.create({
     outlineWidth: 0,
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
+  estimateField: { marginTop: 10, flexDirection: "row", alignItems: "center" },
+  unit: { color: colors.textMuted, fontSize: 15, marginLeft: 8 },
   checklist: { marginTop: 12, gap: 8 },
   itemRow: {
     flexDirection: "row",

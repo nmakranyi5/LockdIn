@@ -6,6 +6,7 @@ import {
   formatClock,
   formatMs,
   getTaskState,
+  humanDuration,
   kindOf,
   priorityOf,
   repeatOf,
@@ -95,6 +96,12 @@ export default function TaskCard({
               : kMeta.label
           }
         />
+        {kind === "timer" && !!task.estimateMinutes && (
+          <Tag
+            icon="hourglass-outline"
+            text={`Est. ${humanDuration(task.estimateMinutes * 60_000)}`}
+          />
+        )}
         {priority !== "normal" && (
           <Tag icon={pMeta.icon} text={pMeta.label} color={pMeta.color} />
         )}
@@ -130,7 +137,11 @@ export default function TaskCard({
         <View style={styles.timerWrap}>
           <Text style={styles.timerLabel}>{s.label}</Text>
           <Text
-            style={[styles.timer, s.isOverdue && { color: colors.danger }]}
+            style={[
+              styles.timer,
+              s.isOvertime && { color: colors.warning },
+              s.isOverdue && { color: colors.danger },
+            ]}
           >
             {s.valueText ?? formatMs(s.timeMs)}
           </Text>
@@ -168,6 +179,8 @@ export default function TaskCard({
                     ? colors.success
                     : s.isOverdue
                     ? colors.danger
+                    : s.isOvertime
+                    ? colors.warning
                     : colors.accent,
               },
             ]}

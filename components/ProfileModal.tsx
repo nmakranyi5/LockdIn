@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import {
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,7 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
@@ -35,14 +39,30 @@ const cellStyle: Record<DayStatus, { bg: string; border: string; text: string }>
   future: { bg: "transparent", border: colors.border, text: colors.border },
 };
 
-export default function ProfileModal({
-  visible,
+export default function ProfileModal(props: ProfileModalProps) {
+  return (
+    <Modal
+      animationType="slide"
+      visible={props.visible}
+      onRequestClose={props.onClose}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
+      <SafeAreaProvider>
+        <ProfileContent {...props} />
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+function ProfileContent({
   onClose,
   profile,
   onChange,
   stats,
   todayKey,
 }: ProfileModalProps) {
+  const insets = useSafeAreaInsets();
   // Calendar: WEEKS rows, Monday first, ending with the current week.
   const today = fromKey(todayKey);
   const mondayOffset = (today.getDay() + 6) % 7;
@@ -62,12 +82,21 @@ export default function ProfileModal({
       : "Complete all of a day's tasks to start a streak.";
 
   return (
-    <Modal animationType="slide" visible={visible} onRequestClose={onClose}>
-      <SafeAreaView style={styles.screen}>
+    <View
+      style={[
+        styles.screen,
+        {
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        },
+      ]}
+    >
         <View style={styles.column}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Profile</Text>
-            <IconButton name="close" size={18} onPress={onClose} />
+            <IconButton name="close" label="Close" size={18} onPress={onClose} />
           </View>
 
           <ScrollView
@@ -76,18 +105,24 @@ export default function ProfileModal({
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.identity}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{profile.avatar}</Text>
+              <View style={styles.identityRow}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{profile.avatar}</Text>
+                </View>
+                <TextInput
+                  value={profile.name}
+                  onChangeText={(name) => onChange({ ...profile, name })}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={24}
+                  style={styles.name}
+                />
               </View>
-              <TextInput
-                value={profile.name}
-                onChangeText={(name) => onChange({ ...profile, name })}
-                placeholder="Your name"
-                placeholderTextColor={colors.textMuted}
-                maxLength={24}
-                style={styles.name}
-              />
-              <View style={styles.avatarRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.avatarRow}
+              >
                 {AVATARS.map((a) => (
                   <TouchableOpacity
                     key={a}
@@ -98,7 +133,7 @@ export default function ProfileModal({
                     <Text style={styles.avatarChoiceText}>{a}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             </View>
 
             <View style={styles.hero}>
@@ -180,8 +215,7 @@ export default function ProfileModal({
             </View>
           </ScrollView>
         </View>
-      </SafeAreaView>
-    </Modal>
+    </View>
   );
 }
 
@@ -221,28 +255,29 @@ const styles = StyleSheet.create({
   },
   content: { paddingBottom: 32, gap: 16 },
 
-  identity: { alignItems: "center", gap: 12, paddingTop: 8 },
+  identity: { gap: 12, paddingTop: 4 },
+  identityRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { fontSize: 44 },
+  avatarText: { fontSize: 32 },
   name: {
-    minWidth: 180,
-    textAlign: "center",
+    flex: 1,
+    minWidth: 0,
     fontSize: 22,
     fontWeight: "700",
     color: colors.textPrimary,
     paddingVertical: 6,
-    ...({ outlineStyle: "none" } as object),
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
-  avatarRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8 },
+  avatarRow: { gap: 8, paddingRight: 4 },
   avatarChoice: {
     width: 44,
     height: 44,
@@ -258,7 +293,7 @@ const styles = StyleSheet.create({
 
   hero: {
     alignItems: "center",
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingHorizontal: 16,
     borderRadius: radius.xl,
     backgroundColor: colors.card,
@@ -266,11 +301,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   heroNumber: {
-    fontSize: 64,
+    fontSize: 56,
     fontWeight: "800",
     letterSpacing: -2,
     color: colors.textPrimary,
-    lineHeight: 70,
+    lineHeight: 62,
   },
   heroLabel: { fontSize: 16, fontWeight: "600", color: colors.textMuted },
   heroHint: { marginTop: 10, fontSize: 14, color: colors.textMuted, textAlign: "center" },

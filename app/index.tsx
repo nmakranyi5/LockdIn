@@ -1,7 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import DayStrip from "../components/DayStrip";
@@ -372,42 +380,20 @@ export default function Index() {
     setIsModalVisible(true);
   };
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.column}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          onPress={() => setIsProfileVisible(true)}
-          style={styles.avatarButton}
-        >
-          <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
-        </TouchableOpacity>
-        <Text style={styles.brandName}>LockdIn</Text>
-        <View style={styles.topRight}>
-          <StreakChip
-            count={stats.current}
-            lit={stats.today === "complete"}
-            onPress={() => setIsProfileVisible(true)}
-          />
-          <IconButton
-            name="help-outline"
-            size={18}
-            onPress={() => setIsHelpModalVisible(true)}
-          />
-          <IconButton
-            name="settings-outline"
-            size={18}
-            onPress={() => setIsSettingsModalVisible(true)}
-          />
-        </View>
-      </View>
+  // On short screens (landscape phones) the day header scrolls with the list
+  // so the tasks get the room.
+  const { height: windowHeight } = useWindowDimensions();
+  // Decided after mount so the static web pre-render (height 0) matches.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const compact = mounted && windowHeight < 600;
 
+  const dayHeader = (
+    <>
       <View style={styles.dayHeader}>
         <IconButton
           name="chevron-back"
+          label="Previous day"
           size={18}
           onPress={() => setSelectedDay((d) => addDays(d, -1))}
         />
@@ -417,6 +403,7 @@ export default function Index() {
         </View>
         <IconButton
           name="chevron-forward"
+          label="Next day"
           size={18}
           onPress={() => setSelectedDay((d) => addDays(d, 1))}
         />
@@ -437,12 +424,54 @@ export default function Index() {
           <Text style={styles.jumpText}>Back to today</Text>
         </TouchableOpacity>
       )}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.column}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          onPress={() => setIsProfileVisible(true)}
+          style={styles.avatarButton}
+        >
+          <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
+        </TouchableOpacity>
+        <Text style={styles.brandName} numberOfLines={1}>
+          LockdIn
+        </Text>
+        <View style={styles.topRight}>
+          <StreakChip
+            count={stats.current}
+            lit={stats.today === "complete"}
+            onPress={() => setIsProfileVisible(true)}
+          />
+          <IconButton
+            name="help-outline"
+            label="Help"
+            size={18}
+            onPress={() => setIsHelpModalVisible(true)}
+          />
+          <IconButton
+            name="settings-outline"
+            label="Settings"
+            size={18}
+            onPress={() => setIsSettingsModalVisible(true)}
+          />
+        </View>
+      </View>
+
+      {!compact && dayHeader}
 
       <ScrollView
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
+        {compact && dayHeader}
         {isSameDay(selectedDay, today) &&
           dayTasks.length > 0 &&
           stats.today === "complete" && (
@@ -593,6 +622,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   avatarButton: {
+    flexShrink: 0,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -603,7 +633,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   avatarEmoji: { fontSize: 20 },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -617,6 +647,10 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
   bannerSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
   brandName: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: "center",
+    marginHorizontal: 8,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.4,

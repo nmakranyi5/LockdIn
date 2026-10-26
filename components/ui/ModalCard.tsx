@@ -6,9 +6,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from "react-native";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { colors, radius } from "../../assets/colors/colors";
 
 type ModalCardProps = {
@@ -16,7 +19,6 @@ type ModalCardProps = {
   title?: string;
   headerRight?: ReactNode;
   maxWidth?: number;
-  scroll?: boolean;
   children?: ReactNode;
   footer?: ReactNode;
   // Rendered inside the Modal so nested modals stack correctly on iOS.
@@ -28,45 +30,80 @@ export default function ModalCard({
   title,
   headerRight,
   maxWidth = 440,
-  scroll,
   children,
   footer,
   overlay,
 }: ModalCardProps) {
-  const { height } = useWindowDimensions();
-  const body = scroll ? (
-    <ScrollView
-      style={{ maxHeight: height * 0.58 }}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      {children}
-    </ScrollView>
-  ) : (
-    children
-  );
-
   return (
-    <Modal animationType="fade" transparent visible={visible}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.flex}
-      >
-        <View style={styles.backdrop}>
-          <View style={[styles.card, { maxWidth }]}>
-            {title ? (
-              <View style={styles.header}>
-                <Text style={styles.title}>{title}</Text>
-                {headerRight}
-              </View>
-            ) : null}
-            <View style={styles.body}>{body}</View>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+    <Modal
+      animationType="fade"
+      transparent
+      visible={visible}
+      statusBarTranslucent
+      navigationBarTranslucent
+    >
+      <SafeAreaProvider>
+        <Content
+          title={title}
+          headerRight={headerRight}
+          maxWidth={maxWidth}
+          footer={footer}
+        >
+          {children}
+        </Content>
+      </SafeAreaProvider>
       {overlay}
     </Modal>
+  );
+}
+
+// Lives inside the Modal's own SafeAreaProvider so insets are right on every
+// platform, and the card never grows past the screen: the body scrolls and the
+// footer stays pinned.
+function Content({
+  title,
+  headerRight,
+  maxWidth,
+  children,
+  footer,
+}: Pick<ModalCardProps, "title" | "headerRight" | "maxWidth" | "children" | "footer">) {
+  const insets = useSafeAreaInsets();
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.flex}
+    >
+      <View
+        style={[
+          styles.backdrop,
+          {
+            paddingTop: Math.max(20, insets.top + 8),
+            paddingBottom: Math.max(20, insets.bottom + 8),
+            paddingLeft: Math.max(20, insets.left + 8),
+            paddingRight: Math.max(20, insets.right + 8),
+          },
+        ]}
+      >
+        <View style={[styles.card, { maxWidth }]}>
+          {title ? (
+            <View style={styles.header}>
+              <Text style={styles.title} numberOfLines={2}>
+                {title}
+              </Text>
+              {headerRight}
+            </View>
+          ) : null}
+          <ScrollView
+            style={styles.body}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {children}
+          </ScrollView>
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -81,6 +118,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
+    maxHeight: "100%",
     backgroundColor: colors.card,
     borderRadius: radius.xl,
     borderWidth: 1,
@@ -96,14 +134,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     marginBottom: 4,
   },
   title: {
+    flexShrink: 1,
     fontSize: 24,
     fontWeight: "700",
     letterSpacing: -0.4,
     color: colors.textPrimary,
   },
-  body: { marginTop: 12 },
+  body: { marginTop: 12, flexShrink: 1, flexGrow: 0 },
   footer: { marginTop: 24, gap: 10 },
 });

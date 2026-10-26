@@ -9,6 +9,7 @@ type IconButtonProps = {
   color?: string;
   background?: string;
   disabled?: boolean;
+  label?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -19,6 +20,7 @@ export default function IconButton({
   color = colors.textPrimary,
   background = colors.surface,
   disabled,
+  label,
   style,
 }: IconButtonProps) {
   const box = size + 22;
@@ -26,6 +28,8 @@ export default function IconButton({
     <TouchableOpacity
       activeOpacity={0.7}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       onPress={onPress}
       style={[
         styles.base,

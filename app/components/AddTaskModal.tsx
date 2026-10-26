@@ -389,13 +389,13 @@ export default function AddTaskModal({
         <View style={styles.headerActions}>
           <IconButton
             name="help-outline"
+            label="Help"
             size={18}
             onPress={() => setIsHelpModalVisible(true)}
           />
-          <IconButton name="close" size={18} onPress={onClose} />
+          <IconButton name="close" label="Close" size={18} onPress={onClose} />
         </View>
       }
-      scroll
       maxWidth={480}
       footer={<Button label="Save" onPress={handleSave} />}
       overlay={
@@ -654,6 +654,7 @@ const styles = StyleSheet.create({
   },
   itemInput: {
     flex: 1,
+    minWidth: 0,
     height: 44,
     color: colors.textPrimary,
     fontSize: 15,

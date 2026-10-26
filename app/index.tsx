@@ -711,6 +711,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         isVisible={isSettingsModalVisible}
         onClose={() => setIsSettingsModalVisible(false)}
         account={account}
+        localOnly={!auth.configured}
       />
 
       <ProfileModal

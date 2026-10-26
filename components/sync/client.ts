@@ -9,6 +9,14 @@ const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 // Without credentials the app runs purely local, exactly as before.
 export const isSupabaseConfigured = !!url && !!anonKey;
 
+if (__DEV__ && !isSupabaseConfigured) {
+  console.warn(
+    "[LockdIn] Supabase is not configured, so the app is running local-only with no sign-in. " +
+      "Create a .env file in the project root with EXPO_PUBLIC_SUPABASE_URL and " +
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY, then restart with: npx expo start -c"
+  );
+}
+
 export const supabase = isSupabaseConfigured
   ? createClient(url!, anonKey!, {
       auth: {

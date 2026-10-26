@@ -25,6 +25,8 @@ type SettingsModalProps = {
   onClose: () => void;
   // Present only when the app is connected to Supabase.
   account?: AccountInfo;
+  // Developer hint: no Supabase keys were found, so there is no sign-in.
+  localOnly?: boolean;
 };
 
 function ago(ms: number | null) {
@@ -41,6 +43,7 @@ export default function SettingsModal({
   isVisible,
   onClose,
   account,
+  localOnly,
 }: SettingsModalProps) {
   const [helpVisible, setHelpVisible] = useState(false);
   const [confirm, setConfirm] = useState<"signOut" | "delete" | null>(null);
@@ -117,6 +120,17 @@ export default function SettingsModal({
         </>
       }
     >
+      {__DEV__ && localOnly && !account && (
+        <View style={styles.devNote}>
+          <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
+          <Text style={styles.devNoteText}>
+            Supabase isn't configured, so there's no sign-in and data stays on this device. Add
+            EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file, then
+            restart with npx expo start -c.
+          </Text>
+        </View>
+      )}
+
       {account && (
         <View style={styles.account}>
           <View style={styles.accountTop}>
@@ -215,6 +229,17 @@ export default function SettingsModal({
 }
 
 const styles = StyleSheet.create({
+  devNote: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  devNoteText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 19, color: colors.textPrimary },
   account: {
     gap: 12,
     padding: 14,

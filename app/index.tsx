@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
 import { useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,6 +13,7 @@ import {
   startOfDay,
   Task,
 } from "../components/taskState";
+import * as Notifications from "../components/notifications";
 import Button from "../components/ui/Button";
 import IconButton from "../components/ui/IconButton";
 import AddTaskModal from "./components/AddTaskModal";
@@ -324,6 +324,7 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.screen}>
+      <View style={styles.column}>
       <View style={styles.topBar}>
         <IconButton
           name="help-outline"
@@ -460,6 +461,7 @@ export default function Index() {
         isVisible={isSettingsModalVisible}
         onClose={() => setIsSettingsModalVisible(false)}
       />
+      </View>
     </SafeAreaView>
   );
 }
@@ -468,6 +470,12 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
+    alignItems: "center",
+  },
+  column: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 560,
     paddingHorizontal: 20,
   },
   topBar: {

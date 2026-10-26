@@ -14,6 +14,7 @@ import { colors, radius } from "../../assets/colors/colors";
 import Button from "../../components/ui/Button";
 import IconButton from "../../components/ui/IconButton";
 import ModalCard from "../../components/ui/ModalCard";
+import WebPicker from "../../components/ui/WebPicker";
 import HelpTaskScreenModal from "./HelpTaskScreenModal";
 
 type AddTaskModalProps = {
@@ -185,7 +186,7 @@ export default function AddTaskModal({
   }, []);
 
   useEffect(() => {
-    if (!isAndroid) return;
+    if (Platform.OS === "ios") return;
 
     const nowDate = new Date();
     nowDate.setSeconds(0, 0);
@@ -199,6 +200,23 @@ export default function AddTaskModal({
       return normalized < minStart ? minStart : normalized;
     });
   }, [startDate, now]);
+
+  const isWeb = Platform.OS === "web";
+
+  // Web has no native min/max enforcement across the pickers, so keep the
+  // deadline at least a minute after the start.
+  useEffect(() => {
+    if (!isWeb) return;
+    const start = new Date(startDate);
+    start.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+    const end = new Date(endDate);
+    end.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+    if (end.getTime() <= start.getTime()) {
+      const fixed = new Date(start.getTime() + 60_000);
+      setEndDate(fixed);
+      setEndTime(fixed);
+    }
+  }, [startDate, startTime, endDate, endTime]);
 
   function normalize(date: Date) {
     const d = new Date(date);
@@ -291,6 +309,12 @@ export default function AddTaskModal({
     onClose();
   };
 
+  const startOfToday = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
   const startEndMinDeadline = () => {
     if (endDate.toDateString() !== startDate.toDateString()) return undefined;
     const d = new Date(startDate);
@@ -332,6 +356,26 @@ export default function AddTaskModal({
       </View>
 
       <Text style={styles.label}>Start</Text>
+      {isWeb ? (
+        <View style={styles.pickerRow}>
+          <WebPicker
+            type="date"
+            value={startDate}
+            min={startOfToday()}
+            onChange={setStartDate}
+          />
+          <WebPicker
+            type="time"
+            value={startTime}
+            min={
+              startDate.toDateString() === now.toDateString()
+                ? getMinStartTime()
+                : undefined
+            }
+            onChange={(t) => setStartTime(normalize(t))}
+          />
+        </View>
+      ) : (
       <View style={styles.pickerRow}>
         <TouchableOpacity
           style={isAndroid ? styles.field : undefined}
@@ -376,7 +420,25 @@ export default function AddTaskModal({
         </TouchableOpacity>
       </View>
 
+      )}
+
       <Text style={styles.label}>Deadline</Text>
+      {isWeb ? (
+        <View style={styles.pickerRow}>
+          <WebPicker
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={setEndDate}
+          />
+          <WebPicker
+            type="time"
+            value={endTime}
+            min={startEndMinDeadline()}
+            onChange={(t) => setEndTime(normalize(t))}
+          />
+        </View>
+      ) : (
       <View style={styles.pickerRow}>
         <TouchableOpacity
           style={isAndroid ? styles.field : undefined}
@@ -417,6 +479,8 @@ export default function AddTaskModal({
         </TouchableOpacity>
       </View>
 
+      )}
+
       <Text style={styles.hint}>
         Pickers automatically adjust to prevent selecting times that have
         already passed.
@@ -453,6 +517,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     outlineColor: "transparent",
     outlineWidth: 0,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
   hint: {
     color: colors.textMuted,

@@ -44,3 +44,6 @@ app-example
 
 # layout check output
 dist-web/
+
+# Supabase credentials
+.env

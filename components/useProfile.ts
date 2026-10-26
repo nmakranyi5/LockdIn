@@ -15,7 +15,7 @@ export const AVATARS = ["🦊", "🐼", "🐯", "🦉", "🐙", "🚀", "⚡", "
 const PROFILE_KEY = "@lockdin_profile";
 const HISTORY_KEY = "@lockdin_history";
 
-const DEFAULT_PROFILE: Profile = { name: "", avatar: AVATARS[0] };
+export const DEFAULT_PROFILE: Profile = { name: "", avatar: AVATARS[0] };
 
 // Profile + frozen day history, plus live streak stats derived from tasks.
 export function useProfile(tasks: Task[], tasksLoaded: boolean, now: number) {
@@ -61,5 +61,5 @@ export function useProfile(tasks: Task[], tasksLoaded: boolean, now: number) {
     [tasks, history, todayKey]
   );
 
-  return { profile, setProfile, stats, todayKey };
+  return { profile, setProfile, history, setHistory, stats, todayKey, loaded };
 }

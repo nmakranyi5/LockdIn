@@ -12,10 +12,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
+import AuthScreen from "../components/auth/AuthScreen";
+import { useAuth } from "../components/auth/AuthProvider";
 import CheckInModal from "../components/CheckInModal";
 import DayStrip from "../components/DayStrip";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
+import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
@@ -49,7 +52,7 @@ import IconButton from "../components/ui/IconButton";
 import AddTaskModal from "./components/AddTaskModal";
 import ConfirmModal from "./components/ConfirmModal";
 import HelpHomeScreenModal from "./components/HelpHomeScreenModal";
-import SettingsModal from "./components/SettingsModal";
+import SettingsModal, { AccountInfo } from "./components/SettingsModal";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -71,7 +74,24 @@ type TaskInput = {
   estimateMinutes?: number;
 };
 
+// Signed-out visitors see the sign-in screen. Without Supabase credentials the
+// app skips it and runs purely on-device.
 export default function Index() {
+  const auth = useAuth();
+  if (auth.configured && auth.loading) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
+  if (auth.configured && !auth.session) return <AuthScreen />;
+  return (
+    <Home
+      userId={auth.session?.user.id ?? null}
+      email={auth.session?.user.email ?? null}
+    />
+  );
+}
+
+function Home({ userId, email }: { userId: string | null; email: string | null }) {
+  const auth = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
@@ -282,7 +302,9 @@ export default function Index() {
     const sched = await scheduleTaskNotifications({ ...task, ...occurrence });
     const next: Task = {
       ...task,
-      id: newId(),
+      // Deterministic so two devices spawning the same occurrence agree on it
+      // instead of creating duplicates.
+      id: `${seriesKey(task)}@${sched.startDate.getTime()}`,
       seriesId: seriesKey(task),
       startDate: sched.startDate,
       endDate: sched.endDate,
@@ -352,7 +374,54 @@ export default function Index() {
     ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
     : 0;
 
-  const { profile, setProfile, stats, todayKey } = useProfile(tasks, loaded, now);
+  const {
+    profile,
+    setProfile,
+    history,
+    setHistory,
+    stats,
+    todayKey,
+    loaded: profileLoaded,
+  } = useProfile(tasks, loaded, now);
+
+  const sync = useSync({
+    userId,
+    ready: loaded && profileLoaded,
+    tasks,
+    setTasks,
+    profile,
+    setProfile,
+    history,
+    setHistory,
+  });
+
+  const account: AccountInfo | undefined =
+    auth.configured && userId
+      ? {
+          email,
+          status: sync.status,
+          lastSyncedAt: sync.lastSyncedAt,
+          error: sync.error,
+          pending: sync.pending,
+          onSyncNow: () => {
+            sync.syncNow();
+          },
+          onSignOut: async () => {
+            // Push whatever we can, then forget this device's copy so the next
+            // person to sign in doesn't inherit it.
+            await sync.syncNow();
+            await sync.wipeLocal();
+            await auth.signOut();
+          },
+          onDeleteAccount: async () => {
+            const r = await auth.deleteAccount();
+            if (r.error) return r.error;
+            await sync.wipeLocal();
+            await auth.signOut();
+            return undefined;
+          },
+        }
+      : undefined;
 
   const endTask = findTask(endId);
   const endsEarly = !!endTask && isEarlyFinish(endTask, now);
@@ -641,6 +710,7 @@ export default function Index() {
       <SettingsModal
         isVisible={isSettingsModalVisible}
         onClose={() => setIsSettingsModalVisible(false)}
+        account={account}
       />
 
       <ProfileModal

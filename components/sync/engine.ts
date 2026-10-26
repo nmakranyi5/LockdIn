@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { History } from "../streak";
 import { Task } from "../taskState";
+import { XpLedger } from "../xp";
 import {
   HistoryRow,
   mergeLocalOnly,
@@ -164,4 +165,31 @@ export async function pushProfile(client: SupabaseClient, userId: string, p: Rem
     .from("profiles")
     .upsert({ id: userId, name: p.name, avatar: p.avatar }, { onConflict: "id" });
   check(error);
+}
+
+// Each finished day's XP is write-once, first device to report wins.
+export async function pushXp(client: SupabaseClient, userId: string, ledger: XpLedger, days: string[]) {
+  const rows = days.map((day) => ({ user_id: userId, day, xp: ledger[day] }));
+  for (const part of chunks(rows, CHUNK)) {
+    const { error } = await client
+      .from("day_xp")
+      .upsert(part, { onConflict: "user_id,day", ignoreDuplicates: true });
+    check(error);
+  }
+}
+
+export async function pullXp(client: SupabaseClient, userId: string): Promise<XpLedger> {
+  const out: XpLedger = {};
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client
+      .from("day_xp")
+      .select("day,xp")
+      .eq("user_id", userId)
+      .order("day", { ascending: true })
+      .range(from, from + PAGE - 1);
+    check(error);
+    for (const r of (data ?? []) as { day: string; xp: number }[]) out[r.day] = r.xp;
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
 }

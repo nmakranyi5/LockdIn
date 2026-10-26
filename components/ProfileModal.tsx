@@ -17,6 +17,7 @@ import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
 import IconButton from "./ui/IconButton";
+import { MAX_STREAK_BONUS_DAYS, STREAK_BONUS_PER_DAY, XpSummary } from "./xp";
 import { AVATARS, Profile } from "./useProfile";
 
 type ProfileModalProps = {
@@ -25,6 +26,7 @@ type ProfileModalProps = {
   profile: Profile;
   onChange: (p: Profile) => void;
   stats: StreakStats;
+  xp: XpSummary;
   todayKey: string;
 };
 
@@ -60,6 +62,7 @@ function ProfileContent({
   profile,
   onChange,
   stats,
+  xp,
   todayKey,
 }: ProfileModalProps) {
   const insets = useSafeAreaInsets();
@@ -147,6 +150,40 @@ function ProfileContent({
                 day{stats.current === 1 ? "" : "s"} streak
               </Text>
               <Text style={styles.heroHint}>{heroLine}</Text>
+            </View>
+
+            <View style={styles.levelCard} accessibilityLabel={`Level ${xp.level}, ${xp.total} XP`}>
+              <View style={styles.levelTop}>
+                <View style={styles.levelBadge}>
+                  <Ionicons name="star" size={20} color={colors.warning} />
+                </View>
+                <View style={styles.levelText}>
+                  <Text style={styles.levelTitle}>
+                    Level {xp.level} · {xp.title}
+                  </Text>
+                  <Text style={styles.levelSub}>{xp.total.toLocaleString()} XP total</Text>
+                </View>
+                <View style={styles.todayXp}>
+                  <Text style={styles.todayXpNum}>+{xp.today.xp}</Text>
+                  <Text style={styles.todayXpLabel}>today</Text>
+                </View>
+              </View>
+              <View style={styles.xpTrack}>
+                <View style={[styles.xpFill, { width: `${Math.round(xp.progress * 100)}%` }]} />
+              </View>
+              <View style={styles.xpMeta}>
+                <Text style={styles.xpMetaText}>
+                  {xp.xpIntoLevel} / {xp.xpForNext} XP
+                </Text>
+                <Text style={styles.xpMetaText}>
+                  {xp.toNext} to level {xp.level + 1}
+                </Text>
+              </View>
+              <Text style={styles.bonus}>
+                {xp.today.streakBefore > 0
+                  ? `🔥 ×${xp.today.multiplier.toFixed(2)} streak bonus on today's XP`
+                  : `Build a streak for bonus XP: +${Math.round(STREAK_BONUS_PER_DAY * 100)}% per day, up to ×${(1 + STREAK_BONUS_PER_DAY * MAX_STREAK_BONUS_DAYS).toFixed(1)}.`}
+              </Text>
             </View>
 
             <View style={styles.statsRow}>
@@ -310,6 +347,34 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 16, fontWeight: "600", color: colors.textMuted },
   heroHint: { marginTop: 10, fontSize: 14, color: colors.textMuted, textAlign: "center" },
 
+  levelCard: {
+    gap: 10,
+    padding: 16,
+    borderRadius: radius.xl,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  levelTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  levelBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.warningSoft,
+  },
+  levelText: { flex: 1, minWidth: 0 },
+  levelTitle: { fontSize: 17, fontWeight: "800", color: colors.textPrimary },
+  levelSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  todayXp: { alignItems: "flex-end" },
+  todayXpNum: { fontSize: 20, fontWeight: "800", color: colors.success },
+  todayXpLabel: { fontSize: 11, fontWeight: "600", color: colors.textMuted },
+  xpTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceRaised, overflow: "hidden" },
+  xpFill: { height: "100%", borderRadius: 4, backgroundColor: colors.warning },
+  xpMeta: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  xpMetaText: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
+  bonus: { fontSize: 13, lineHeight: 18, color: colors.textLabel },
   statsRow: { flexDirection: "row", gap: 10 },
   stat: {
     flex: 1,

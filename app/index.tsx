@@ -20,8 +20,10 @@ import { setNudgesEnabled } from "../components/friends/api";
 import FriendsModal from "../components/friends/FriendsModal";
 import { useFriends, usePublishStreak } from "../components/friends/useFriends";
 import { usePush } from "../components/friends/usePush";
+import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
+import { dayKey } from "../components/streak";
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
@@ -384,7 +386,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setProfile,
     history,
     setHistory,
+    xpLedger,
+    setXpLedger,
     stats,
+    xp,
     todayKey,
     loaded: profileLoaded,
   } = useProfile(tasks, loaded, now);
@@ -398,6 +403,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setProfile,
     history,
     setHistory,
+    xpLedger,
+    setXpLedger,
   });
 
   const social = auth.configured && !!userId;
@@ -459,6 +466,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     isFriendsVisible ||
     deleteId !== null ||
     endId !== null;
+  // Level-up celebration: only once progress has loaded, and after the first
+  // sync when signed in so older progress isn't mistaken for a new level.
+  const levelUp = useLevelUp(
+    xp.level,
+    userId,
+    profileLoaded && (!social || sync.lastSyncedAt !== null)
+  );
+  const dayXpInfo = xp.forDay(dayKey(selectedDay));
+
   // Only one prompt at a time, and never stacked on top of another dialog.
   const checkInTask = anyModalOpen
     ? undefined
@@ -508,7 +524,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       year: selectedDay.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
     });
     if (dayTasks.length === 0) return date;
-    return `${date} · ${doneCount}/${dayTasks.length} done`;
+    const earned = dayXpInfo.total > 0 ? ` · +${dayXpInfo.total} XP` : "";
+    return `${date} · ${doneCount}/${dayTasks.length} done${earned}`;
   };
 
   const openAdd = () => {
@@ -534,8 +551,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           onPress={() => setSelectedDay((d) => addDays(d, -1))}
         />
         <View style={styles.dayTitleWrap}>
-          <Text style={styles.dayTitle}>{dayTitle()}</Text>
-          <Text style={styles.daySub}>{daySubtitle()}</Text>
+          <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
+            {dayTitle()}
+          </Text>
+          <Text style={styles.daySub} numberOfLines={2}>
+            {daySubtitle()}
+          </Text>
         </View>
         <IconButton
           name="chevron-forward"
@@ -604,7 +625,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               <View style={{ flex: 1 }}>
                 <Text style={styles.bannerTitle}>All done for today</Text>
                 <Text style={styles.bannerSub}>
-                  {stats.current} day{stats.current === 1 ? "" : "s"} streak
+                  {stats.current} day{stats.current === 1 ? "" : "s"} streak · +{xp.today.xp} XP
+                  {xp.today.multiplier > 1 ? ` (×${xp.today.multiplier.toFixed(2)})` : ""}
                 </Text>
               </View>
             </View>
@@ -637,6 +659,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               onToggleItem={(itemId) => toggleItem(task.id, itemId)}
               onReschedule={() => onEdit(task.id)}
               onDelete={() => setDeleteId(task.id)}
+              xp={dayXpInfo.perTask.get(task.id)}
             />
           ))
         )}
@@ -733,6 +756,11 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         }}
       />
 
+      <LevelUpModal
+        level={anyModalOpen || checkInTask ? null : levelUp.celebrate}
+        onClose={levelUp.dismiss}
+      />
+
       <CheckInModal
         task={checkInTask}
         now={now}
@@ -780,6 +808,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         profile={profile}
         onChange={setProfile}
         stats={stats}
+        xp={xp}
         todayKey={todayKey}
       />
 
@@ -842,14 +871,16 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 16,
   },
-  dayTitleWrap: { alignItems: "center" },
+  // Takes whatever room the arrows leave, so a longer subtitle wraps instead of
+  // pushing the buttons off-screen.
+  dayTitleWrap: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 8 },
   dayTitle: {
     fontSize: 34,
     fontWeight: "800",
     letterSpacing: -1,
     color: colors.textPrimary,
   },
-  daySub: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+  daySub: { fontSize: 14, color: colors.textMuted, marginTop: 2, textAlign: "center" },
   jump: {
     alignSelf: "center",
     flexDirection: "row",

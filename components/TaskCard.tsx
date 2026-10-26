@@ -23,6 +23,8 @@ type TaskCardProps = {
   onToggleItem: (itemId: string) => void;
   onReschedule: () => void;
   onDelete: () => void;
+  // XP this task earned (shown once it is completed).
+  xp?: number;
 };
 
 export default function TaskCard({
@@ -35,6 +37,7 @@ export default function TaskCard({
   onToggleItem,
   onReschedule,
   onDelete,
+  xp,
 }: TaskCardProps) {
   const s = getTaskState(task, now);
   const kind = kindOf(task);
@@ -102,6 +105,7 @@ export default function TaskCard({
             text={`Est. ${humanDuration(task.estimateMinutes * 60_000)}`}
           />
         )}
+        {completed && !!xp && <Tag icon="star" text={`+${xp} XP`} color={colors.warning} />}
         {priority !== "normal" && (
           <Tag icon={pMeta.icon} text={pMeta.label} color={pMeta.color} />
         )}

@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these four files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these five files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -14,8 +14,11 @@ In the Supabase dashboard open **SQL Editor → New query** and run these four f
 4. [`migrations/20260101000300_signup_username.sql`](migrations/20260101000300_signup_username.sql): lets
    people choose their username on the sign-up screen (with a live "available / taken" check). Skipping it
    is harmless: sign-up still works and people are asked for a username on the Friends screen instead.
+5. [`migrations/20260101000400_xp.sql`](migrations/20260101000400_xp.sql): the XP ledger (see "Experience and
+   levels" below). Skipping it is harmless: XP and levels still work on the device, they just don't sync
+   between devices.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all four.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all five.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.
@@ -69,11 +72,14 @@ npm i --no-save @electric-sql/pglite
 node supabase/tests/rls.test.mjs
 ```
 
+`supabase/tests/xp.test.mjs` covers the XP ledger (owner-only, write-once, hidden from friends).
+
 `supabase/tests/friends.test.mjs` does the same for the friends migration (requests, privacy, shared
 streaks, nudges, push payloads, account deletion):
 
 ```bash
 node supabase/tests/friends.test.mjs
+node supabase/tests/xp.test.mjs
 ```
 
 Re-run both after editing a migration or adding new ones.
@@ -111,3 +117,21 @@ no server or Edge Function to deploy. What you need to do:
    see Expo's reply to each push the database sent.
 
 Signing out (or deleting the account) unregisters that phone, so it stops receiving the old account's pushes.
+
+## Experience and levels
+
+- **XP per task** depends on its priority: Low 5, Normal 10, Important 20, Urgent 30.
+- **Streak multiplier**: a day's XP is multiplied by the streak going *into* that day, +5% per day up to ×2.0
+  at 20 days. (Using the streak from before the day avoids the loop where finishing today's tasks would
+  boost the XP for those same tasks.)
+- **Daily cap**: only the 10 most valuable completed tasks of a day count, so piles of trivial tasks can't be
+  farmed.
+- **Levels**: reaching level *n* takes `50 · (n−1) · n` total XP (level 2 = 100, 3 = 300, 5 = 1,000,
+  10 = 4,500, 20 = 19,000). Titles: Newcomer, Getting Started (3), Focused (5), Dedicated (10),
+  Relentless (15), Legend (25).
+- **Frozen days**: a finished day's XP is stored once (`day_xp`, write-once like `day_history`) so deleting
+  tasks later can't change it, and it syncs between devices. Today's XP is always worked out live.
+- **Private**: unlike streaks, XP and level are visible only to their owner (not to friends).
+
+The numbers live in `components/xp.ts` if you want to tune them. Changing the formula affects days that
+haven't been frozen yet; already-finished days keep the XP they earned.

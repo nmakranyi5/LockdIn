@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Platform,
   StyleSheet,
@@ -70,6 +70,7 @@ export default function AddTaskModal({
     if (!isVisible) return;
 
     setItemsError(false);
+    lastDuration.current = 60 * 60_000;
 
     if (initialTask) {
       const wasDone = !!initialTask.completedAt;
@@ -240,18 +241,22 @@ export default function AddTaskModal({
 
   const isWeb = Platform.OS === "web";
 
-  // Web has no native min/max enforcement across the pickers, so keep the
-  // deadline at least a minute after the start.
+  // The pickers only limit what can be chosen for the deadline, not what
+  // happens to it when the start moves. If the start passes the deadline,
+  // push the deadline out and keep the task's previous length.
+  const lastDuration = useRef(60 * 60_000);
   useEffect(() => {
-    if (!isWeb) return;
     const start = new Date(startDate);
     start.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
     const end = new Date(endDate);
     end.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+
     if (end.getTime() <= start.getTime()) {
-      const fixed = new Date(start.getTime() + 60_000);
+      const fixed = new Date(start.getTime() + lastDuration.current);
       setEndDate(fixed);
       setEndTime(fixed);
+    } else {
+      lastDuration.current = end.getTime() - start.getTime();
     }
   }, [startDate, startTime, endDate, endTime]);
 

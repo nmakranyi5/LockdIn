@@ -1,10 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "../assets/colors/colors";
+import { colors, radius } from "../assets/colors/colors";
+import DayStrip from "../components/DayStrip";
+import TaskCard from "../components/TaskCard";
+import {
+  addDays,
+  getTaskState,
+  isSameDay,
+  startOfDay,
+  Task,
+} from "../components/taskState";
+import Button from "../components/ui/Button";
+import IconButton from "../components/ui/IconButton";
 import AddTaskModal from "./components/AddTaskModal";
 import ConfirmModal from "./components/ConfirmModal";
 import HelpHomeScreenModal from "./components/HelpHomeScreenModal";
@@ -20,54 +31,16 @@ Notifications.setNotificationHandler({
 });
 
 export default function Index() {
-  type Task = {
-    title: string;
-    startDate: Date;
-    endDate: Date;
-    repeats?: string;
-    startNotificationId?: string;
-    deadlineNotificationId?: string;
-    reminderNotificationId?: string;
-    startedAt?: number | null;
-    completedAt?: number | null;
-  };
-
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
-  const [confirmEndVisible, setConfirmEndVisible] = useState(false);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+  const [endIndex, setEndIndex] = useState<number | null>(null);
 
   const TASKS_KEY = "@lockdin_tasks";
-  const INDEX_KEY = "@lockdin_current_index";
-
-  const totalTasks = tasks.length + 1;
-  const isAddCard = currentIndex === tasks.length;
-  const BUFFER_MS = 60_000;
-
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 100);
-    return () => clearInterval(id);
-  }, []);
-
-  const formatMs = (ms: number) => {
-    const total = Math.ceil(ms / 1000);
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, "0")}:${s
-        .toString()
-        .padStart(2, "0")}`;
-    }
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
 
   const normalizeStartTime = (selected: Date) => {
     const currentNow = new Date();
@@ -81,6 +54,13 @@ export default function Index() {
 
     return normalized;
   };
+
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSaveTask = async (task: Task) => {
     if (editingIndex !== null) {
@@ -163,110 +143,55 @@ export default function Index() {
       confirmEditPushNotification();
     } else {
       setTasks((prev) => [...prev, updatedTask]);
-      setCurrentIndex(tasks.length);
       confirmAddPushNotification();
     }
+  
+    setSelectedDay(startOfDay(fireDate));
   };
-
-  const goLeft = () => {
-    setCurrentIndex((i) => (i - 1 + totalTasks) % totalTasks);
-  };
-
-  const goRight = () => {
-    setCurrentIndex((i) => (i + 1) % totalTasks);
-  };
-
-  const onEdit = () => {
-    if (isAddCard) return;
-    setEditingIndex(currentIndex);
+  const onEdit = (index: number) => {
+    setEditingIndex(index);
     setIsModalVisible(true);
   };
 
-  const onDelete = () => {
-    if (isAddCard) return;
-
-    const taskToDelete = tasks[currentIndex];
-    if (!taskToDelete) return;
-
-    const {
-      startNotificationId,
-      deadlineNotificationId,
-      reminderNotificationId,
-    } = taskToDelete;
-
-    if (startNotificationId) {
-      Notifications.cancelScheduledNotificationAsync(startNotificationId);
-    }
-    if (deadlineNotificationId) {
-      Notifications.cancelScheduledNotificationAsync(deadlineNotificationId);
-    }
-    if (reminderNotificationId) {
-      Notifications.cancelScheduledNotificationAsync(reminderNotificationId);
-    }
-
-    setTasks((prev) => {
-      const newTasks = prev.filter((_, index) => index !== currentIndex);
-
-      if (newTasks.length === 0) {
-        setCurrentIndex(0);
-      } else if (currentIndex >= newTasks.length) {
-        setCurrentIndex(newTasks.length - 1);
+  const cancelNotifications = (task?: Task, ...kinds: (keyof Task)[]) => {
+    kinds.forEach((k) => {
+      const id = task?.[k];
+      if (typeof id === "string") {
+        Notifications.cancelScheduledNotificationAsync(id);
       }
-      return newTasks;
     });
   };
 
-  const onStartTask = () => {
-    if (isAddCard) return;
+  const onDelete = (index: number) => {
+    const task = tasks[index];
+    if (!task) return;
+    cancelNotifications(
+      task,
+      "startNotificationId",
+      "deadlineNotificationId",
+      "reminderNotificationId"
+    );
+    setTasks((prev) => prev.filter((_, i) => i !== index));
+  };
 
+  const onStartTask = (index: number) => {
+    const task = tasks[index];
+    if (!task || task.startedAt) return;
+    cancelNotifications(task, "startNotificationId", "reminderNotificationId");
     setTasks((prev) => {
       const updated = [...prev];
-      const task = updated[currentIndex];
-
-      if (task.startedAt) return prev;
-
-      if (task?.startNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          task.startNotificationId
-        );
-      }
-
-      if (task?.reminderNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          task.reminderNotificationId
-        );
-      }
-
-      updated[currentIndex] = {
-        ...task,
-        startedAt: Date.now(),
-      };
-
+      updated[index] = { ...updated[index], startedAt: Date.now() };
       return updated;
     });
   };
 
-  const onEndTask = () => {
+  const onEndTask = (index: number) => {
+    const task = tasks[index];
+    if (!task) return;
+    cancelNotifications(task, "deadlineNotificationId", "reminderNotificationId");
     setTasks((prev) => {
       const updated = [...prev];
-      const task = updated[currentIndex];
-
-      if (task?.deadlineNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          task.deadlineNotificationId
-        );
-      }
-
-      if (task?.reminderNotificationId) {
-        Notifications.cancelScheduledNotificationAsync(
-          task.reminderNotificationId
-        );
-      }
-
-      updated[currentIndex] = {
-        ...updated[currentIndex],
-        completedAt: Date.now(),
-      };
+      updated[index] = { ...updated[index], completedAt: Date.now() };
       return updated;
     });
   };
@@ -334,29 +259,6 @@ export default function Index() {
   }, [tasks]);
 
   useEffect(() => {
-    const loadIndex = async () => {
-      const savedIndex = await AsyncStorage.getItem(INDEX_KEY);
-      if (savedIndex !== null) {
-        setCurrentIndex(Number(savedIndex));
-      }
-    };
-    loadIndex();
-  }, []);
-
-  useEffect(() => {
-    const saveIndex = async () => {
-      await AsyncStorage.setItem(INDEX_KEY, currentIndex.toString());
-    };
-    saveIndex();
-  }, [currentIndex]);
-
-  useEffect(() => {
-    if (currentIndex > tasks.length) {
-      setCurrentIndex(tasks.length);
-    }
-  }, [tasks]);
-
-  useEffect(() => {
     const checkFirstLaunch = async () => {
       try {
         const hasSeenHelp = await AsyncStorage.getItem("hasSeenHelp");
@@ -372,247 +274,145 @@ export default function Index() {
     checkFirstLaunch();
   }, []);
 
+  const today = startOfDay(new Date(now));
+  const isPast = selectedDay.getTime() < today.getTime();
+
+  const dayTasks = useMemo(
+    () =>
+      tasks
+        .map((task, index) => ({ task, index }))
+        .filter(({ task }) => isSameDay(new Date(task.startDate), selectedDay))
+        .sort(
+          (a, b) =>
+            new Date(a.task.startDate).getTime() -
+            new Date(b.task.startDate).getTime()
+        ),
+    [tasks, selectedDay]
+  );
+
+  const doneCount = dayTasks.filter(
+    ({ task }) => getTaskState(task, now).isDone
+  ).length;
+
+  const hasTasks = (d: Date) =>
+    tasks.some((t) => isSameDay(new Date(t.startDate), d));
+
+  const dayTitle = () => {
+    const diff = Math.round(
+      (selectedDay.getTime() - today.getTime()) / 86_400_000
+    );
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff === -1) return "Yesterday";
+    return selectedDay.toLocaleDateString([], { weekday: "long" });
+  };
+
+  const daySubtitle = () => {
+    const date = selectedDay.toLocaleDateString([], {
+      month: "long",
+      day: "numeric",
+      year: selectedDay.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    });
+    if (dayTasks.length === 0) return date;
+    return `${date} · ${doneCount}/${dayTasks.length} done`;
+  };
+
+  const openAdd = () => {
+    setEditingIndex(null);
+    setIsModalVisible(true);
+  };
+
   return (
-    <SafeAreaView
-      style={{
-        flex: 1,
-        padding: 20,
-        backgroundColor: colors.background,
-        alignItems: "center",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          width: "90%",
-          marginTop: 16,
-        }}
-      >
-        <TouchableOpacity onPress={() => setIsHelpModalVisible(true)}>
-          <Ionicons
-            name="help-circle-outline"
-            size={36}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setIsSettingsModalVisible(true)}>
-          <Ionicons
-            name="settings-outline"
-            size={32}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.topBar}>
+        <IconButton
+          name="help-outline"
+          onPress={() => setIsHelpModalVisible(true)}
+        />
+        <Text style={styles.brandName}>LockdIn</Text>
+        <IconButton
+          name="settings-outline"
+          onPress={() => setIsSettingsModalVisible(true)}
+        />
       </View>
-      <View style={{ paddingBottom: 20, paddingTop: 10 }}>
-        <Text
-          style={{
-            fontSize: 32,
-            fontWeight: "bold",
-            color: colors.textPrimary,
-          }}
-        >
-          LockdIn
-        </Text>
-        <Text
-          style={{
-            fontSize: 22,
-            marginTop: 10,
-            color: colors.textMuted,
-            justifyContent: "center",
-            alignItems: "center",
-            textAlign: "center",
-          }}
-        >
-          Tasks
-        </Text>
+
+      <View style={styles.dayHeader}>
+        <IconButton
+          name="chevron-back"
+          size={18}
+          onPress={() => setSelectedDay((d) => addDays(d, -1))}
+        />
+        <View style={styles.dayTitleWrap}>
+          <Text style={styles.dayTitle}>{dayTitle()}</Text>
+          <Text style={styles.daySub}>{daySubtitle()}</Text>
+        </View>
+        <IconButton
+          name="chevron-forward"
+          size={18}
+          onPress={() => setSelectedDay((d) => addDays(d, 1))}
+        />
       </View>
-      <View
-        style={{
-          flex: 1,
-          marginHorizontal: 20,
-          borderRadius: 20,
-          borderWidth: 2,
-          borderStyle: "dashed",
-          borderColor: colors.border,
-          justifyContent: "center",
-          alignItems: "center",
-          width: "90%",
-        }}
-      >
-        {isAddCard ? (
-          <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-            <Ionicons name="add" size={48} color={colors.accent} />
-          </TouchableOpacity>
-        ) : (
-          <>
-            {(() => {
-              const task = tasks[currentIndex];
-              const nowMs = now;
 
-              const startMs = new Date(task.startDate).setSeconds(0, 0);
-              const endMs = new Date(task.endDate).setSeconds(0, 0);
+      <DayStrip
+        selected={selectedDay}
+        onSelect={setSelectedDay}
+        hasTasks={hasTasks}
+      />
 
-              let label = "";
-              let timeMs = 0;
-              let isOverdue = false;
-
-              if (task.completedAt && task.startedAt) {
-                label = "Time spent";
-                timeMs = Math.max(0, task.completedAt - task.startedAt);
-              } else if (!task.startedAt && nowMs < startMs) {
-                label = "Starts in";
-                timeMs = Math.max(0, startMs - nowMs);
-              } else {
-                if (nowMs < endMs) {
-                  label = "Time remaining";
-                  timeMs = Math.max(0, endMs - nowMs);
-                } else {
-                  label = "Deadline passed by";
-                  timeMs = Math.max(0, nowMs - endMs);
-                  isOverdue = true;
-                }
-              }
-
-              return (
-                <View
-                  style={{
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flex: 1,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 50,
-                      padding: 20,
-                      fontWeight: "bold",
-                      textAlign: "center",
-                    }}
-                  >
-                    {task.title}
-                  </Text>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: "bold",
-                      textAlign: "center",
-                      paddingBottom: 10,
-                    }}
-                  >
-                    {label}
-                  </Text>
-                  <Text
-                    style={{
-                      fontVariant: ["tabular-nums"],
-                      fontSize: 40,
-                      color: isOverdue ? "#ff5a5a" : colors.textPrimary,
-                    }}
-                  >
-                    {formatMs(timeMs)}
-                  </Text>
-                  {!task.startedAt && !task.completedAt && (
-                    <TouchableOpacity
-                      style={styles.startButton}
-                      onPress={onStartTask}
-                    >
-                      <Text style={styles.startButtonText}>Start Task</Text>
-                    </TouchableOpacity>
-                  )}
-                  {task.startedAt && !task.completedAt && (
-                    <TouchableOpacity
-                      style={[
-                        styles.startButton,
-                        { backgroundColor: "#ff5a5a" },
-                      ]}
-                      onPress={() => setConfirmEndVisible(true)}
-                    >
-                      <Text style={styles.startButtonText}>End Task</Text>
-                    </TouchableOpacity>
-                  )}
-                  {task.completedAt && (
-                    <TouchableOpacity
-                      style={[
-                        styles.startButton,
-                      ]}
-                      onPress={() => {
-                        setEditingIndex(currentIndex);
-                        setIsModalVisible(true);
-                      }}
-                    >
-                      <Text style={styles.startButtonText}>
-                        Reschedule Task
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })()}
-          </>
-        )}
-      </View>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          width: "100%",
-          maxWidth: 360,
-          marginTop: 16,
-          paddingHorizontal: 20,
-        }}
-      >
-        <TouchableOpacity onPress={goLeft}>
-          <Ionicons
-            name="arrow-back-outline"
-            size={48}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
-
-        <Text style={{ color: colors.textMuted }}>
-          {currentIndex + 1} / {totalTasks}
-        </Text>
-
-        <TouchableOpacity onPress={goRight}>
-          <Ionicons
-            name="arrow-forward-outline"
-            size={48}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
-      </View>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          width: "50%",
-          maxWidth: 260,
-          marginTop: 16,
-        }}
-      >
-        <TouchableOpacity onPress={onEdit}>
-          <Ionicons
-            name="pencil-outline"
-            size={32}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
-
+      {!isSameDay(selectedDay, today) && (
         <TouchableOpacity
-          onPress={() => {
-            if (isAddCard || tasks.length === 0) return;
-            setConfirmDeleteVisible(true);
-          }}
+          style={styles.jump}
+          onPress={() => setSelectedDay(today)}
         >
-          <Ionicons name="trash-outline" size={32} color={colors.textPrimary} />
+          <Ionicons name="return-down-back" size={14} color={colors.accent} />
+          <Text style={styles.jumpText}>Back to today</Text>
         </TouchableOpacity>
-      </View>
+      )}
+
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {dayTasks.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={styles.emptyCircle}>
+              <Ionicons name="calendar-outline" size={32} color={colors.accent} />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {isPast ? "Nothing was scheduled" : "A clear day"}
+            </Text>
+            <Text style={styles.emptySub}>
+              {isPast
+                ? "There were no tasks on this day."
+                : "Add a task and lock in."}
+            </Text>
+          </View>
+        ) : (
+          dayTasks.map(({ task, index }) => (
+            <TaskCard
+              key={`${index}-${task.title}-${new Date(task.startDate).getTime()}`}
+              task={task}
+              now={now}
+              onPress={() => onEdit(index)}
+              onStart={() => onStartTask(index)}
+              onEnd={() => setEndIndex(index)}
+              onReschedule={() => onEdit(index)}
+              onDelete={() => setDeleteIndex(index)}
+            />
+          ))
+        )}
+      </ScrollView>
+
+      {!isPast && (
+        <View style={styles.addBar}>
+          <Button
+            label="Add task"
+            icon={<Ionicons name="add" size={20} color="#fff" />}
+            onPress={openAdd}
+          />
+        </View>
+      )}
 
       <AddTaskModal
         isVisible={isModalVisible}
@@ -623,30 +423,31 @@ export default function Index() {
           }, 0);
         }}
         initialTask={editingIndex !== null ? tasks[editingIndex] : null}
+        defaultDate={selectedDay}
         onSave={handleSaveTask}
       />
 
       <ConfirmModal
-        visible={confirmDeleteVisible}
+        visible={deleteIndex !== null}
         title="Delete Task?"
         message="This action cannot be undone."
         confirmText="Delete"
-        onCancel={() => setConfirmDeleteVisible(false)}
+        onCancel={() => setDeleteIndex(null)}
         onConfirm={() => {
-          setConfirmDeleteVisible(false);
-          onDelete();
+          if (deleteIndex !== null) onDelete(deleteIndex);
+          setDeleteIndex(null);
         }}
       />
 
       <ConfirmModal
-        visible={confirmEndVisible}
+        visible={endIndex !== null}
         title="End Task?"
         message="Are you sure that the task is done? Be honest. 🙏"
         confirmText="End Task"
-        onCancel={() => setConfirmEndVisible(false)}
+        onCancel={() => setEndIndex(null)}
         onConfirm={() => {
-          setConfirmEndVisible(false);
-          onEndTask();
+          if (endIndex !== null) onEndTask(endIndex);
+          setEndIndex(null);
         }}
       />
 
@@ -664,25 +465,69 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
-  startButton: {
-    backgroundColor: colors.accent,
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 999,
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: 20,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  brandName: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
+  },
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  dayTitleWrap: { alignItems: "center" },
+  dayTitle: {
+    fontSize: 34,
+    fontWeight: "800",
+    letterSpacing: -1,
+    color: colors.textPrimary,
+  },
+  daySub: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+  jump: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentSoft,
+  },
+  jumpText: { fontSize: 13, fontWeight: "600", color: colors.accent },
+  list: { flex: 1, marginTop: 16 },
+  listContent: { gap: 12, paddingBottom: 16, flexGrow: 1 },
+  empty: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+    gap: 6,
+    paddingVertical: 40,
   },
-
-  startButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.5,
+  emptyCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.accentSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
+  emptyTitle: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
+  emptySub: { fontSize: 15, color: colors.textMuted },
+  addBar: { paddingBottom: 8, paddingTop: 4 },
 });

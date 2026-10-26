@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { colors, radius } from "../../assets/colors/colors";
 import Button from "../../components/ui/Button";
 import ModalCard from "../../components/ui/ModalCard";
@@ -14,6 +14,8 @@ export type AccountInfo = {
   lastSyncedAt: number | null;
   error: string | null;
   pending: number;
+  nudgesEnabled: boolean;
+  onToggleNudges: (enabled: boolean) => Promise<void>;
   onSyncNow: () => void;
   onSignOut: () => Promise<void>;
   // Resolves to an error message, or undefined on success.
@@ -171,6 +173,26 @@ export default function SettingsModal({
         </View>
       )}
 
+      {account && (
+        <View style={[styles.row, styles.rowBottomGap]}>
+          <View style={styles.iconWrap}>
+            <Ionicons name="notifications-outline" size={21} color={colors.accent} />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Friend nudges</Text>
+            <Text style={styles.rowSub}>Let friends nudge you to finish your day</Text>
+          </View>
+          <Switch
+            accessibilityLabel="Friend nudges"
+            value={account.nudgesEnabled}
+            onValueChange={(v) => {
+              account.onToggleNudges(v).catch(() => {});
+            }}
+            trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
+          />
+        </View>
+      )}
+
       <TouchableOpacity
         activeOpacity={0.8}
         accessibilityRole="button"
@@ -266,6 +288,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   rowGap: { marginTop: 10 },
+  rowBottomGap: { marginBottom: 10 },
   rowDanger: { borderColor: colors.dangerSoft },
   iconWrap: {
     width: 40,

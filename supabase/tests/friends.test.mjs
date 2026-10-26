@@ -11,7 +11,7 @@ const sql = (f) => fs.readFileSync(new URL(`../migrations/${f}`, import.meta.url
 const db = new PGlite();
 await db.exec(`
   create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text);
+  create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb not null default '{}'::jsonb);
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create role anon nologin; create role authenticated nologin;
@@ -26,7 +26,8 @@ await db.exec(`
 await db.exec(sql('20260101000000_init.sql'));
 await db.exec(sql('20260101000100_grants.sql'));
 await db.exec(sql('20260101000200_friends.sql').replace('create extension if not exists pg_net;', ''));
-console.log('ok   all three migrations apply cleanly');
+await db.exec(sql('20260101000300_signup_username.sql'));
+console.log('ok   all four migrations apply cleanly');
 
 let n = 0;
 const ok = (name, cond, extra) => { assert.ok(cond, name + (extra ? ' :: ' + extra : '')); console.log('ok  ', name); };
@@ -41,6 +42,27 @@ const pushes = async () => (await db.query(`select body from net.calls order by 
 const clearPushes = () => db.exec(`delete from net.calls`);
 
 const A = await user('a@x.com'), B = await user('b@x.com'), C = await user('c@x.com'), D = await user('d@x.com');
+
+// ---------------------------------------------------------------- username chosen at sign-up
+const signUp = async (email, meta) => (await db.query(`insert into auth.users (email, raw_user_meta_data) values ('${email}', '${JSON.stringify(meta)}'::jsonb) returning id`)).rows[0].id;
+const nameOf = async (id) => (await db.query(`select username from public.profiles where id='${id}'`)).rows;
+const S1 = await signUp('s1@x.com', { username: 'Sam_Smith' });
+ok('a username sent with the sign-up request lands on the new profile (lower-cased)', (await nameOf(S1))[0].username === 'sam_smith');
+const S2 = await signUp('s2@x.com', { username: 'SAM_SMITH' });
+ok('if it was just taken, sign-up still succeeds, with no username yet', (await nameOf(S2)).length === 1 && (await nameOf(S2))[0].username === null);
+for (const [label, meta] of [['an invalid name', { username: 'a b' }], ['a too-short name', { username: 'ab' }], ['a reserved name', { username: 'Admin' }], ['no username at all', {}], ['a malformed value (object)', { username: { a: 1 } }], ['a malformed value (list)', { username: ['x', 'y'] }], ['an empty value', { username: '' }]]) {
+  const id = await signUp(`x${Math.random().toString(36).slice(2)}@x.com`, meta);
+  const r = await nameOf(id);
+  ok(`${label} never blocks sign-up (profile created, no username)`, r.length === 1 && r[0].username === null);
+}
+const avail = async (name, role) => { if (role) await db.exec(`set role ${role}`); try { return (await db.query(`select public.username_available($1) a`, [name])).rows[0].a; } finally { await db.exec('reset role'); } };
+ok('a numeric value is just text, and digits are allowed', (await nameOf(await signUp('num@x.com', { username: 12345 })))[0].username === '12345');
+ok('username_available: free name -> true', (await avail('brand_new_name', 'anon')) === true);
+ok('username_available: taken name (any case) -> false', (await avail('SAM_smith', 'anon')) === false);
+ok('username_available: invalid / reserved / null -> false', (await avail('a b', 'anon')) === false && (await avail('admin', 'anon')) === false && (await avail(null, 'anon')) === false);
+ok('username_available also works when signed in', (await avail('brand_new_name', 'authenticated')) === true);
+ok('a sign-up username is then taken for everyone else', (await rpc(S1, `public.set_username('sam_smith')`)) === 'ok' && (await rpc(S2, `public.set_username('sam_smith')`)) === 'taken');
+await db.exec(`delete from auth.users where email like 'x%@x.com' or email in ('s1@x.com','s2@x.com','num@x.com')`);
 
 // ---------------------------------------------------------------- usernames
 ok('invalid: too short', (await rpc(A, `public.set_username('ab')`)) === 'invalid');

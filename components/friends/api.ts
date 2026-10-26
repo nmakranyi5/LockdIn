@@ -43,6 +43,16 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+// Works before an account exists (used on the sign-up screen). Returns null when
+// the answer can't be determined (offline, or the SQL isn't installed yet), so
+// the caller can carry on instead of blocking sign-up.
+export async function usernameAvailable(username: string): Promise<boolean | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("username_available", { p_username: username });
+  if (error || typeof data !== "boolean") return null;
+  return data;
+}
+
 export const fetchOverview = (todayKey: string) =>
   rpc<Overview>("friends_overview", { p_today: todayKey });
 

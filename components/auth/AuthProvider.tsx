@@ -19,7 +19,11 @@ type AuthContextValue = {
   loading: boolean;
   session: Session | null;
   signIn: (email: string, password: string) => Promise<Result>;
-  signUp: (email: string, password: string) => Promise<Result & { needsConfirmation?: boolean }>;
+  signUp: (
+    email: string,
+    password: string,
+    username?: string
+  ) => Promise<Result & { needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<Result>;
   resendConfirmation: (email: string) => Promise<Result>;
@@ -51,8 +55,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return error ? { error: friendlyAuthError(error) } : {};
   }, []);
 
-  const signUp = useCallback<AuthContextValue["signUp"]>(async (email, password) => {
-    const { data, error } = await supabase!.auth.signUp({ email: email.trim(), password });
+  const signUp = useCallback<AuthContextValue["signUp"]>(async (email, password, username) => {
+    const { data, error } = await supabase!.auth.signUp({
+      email: email.trim(),
+      password,
+      // Stored with the account so the database can create the profile with it,
+      // even when email confirmation means there is no session yet.
+      options: username ? { data: { username } } : undefined,
+    });
     if (error) return { error: friendlyAuthError(error) };
     // With email confirmation on, there is no session until the link is used.
     return { needsConfirmation: !data.session };

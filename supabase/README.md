@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these three files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these four files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -11,8 +11,11 @@ In the Supabase dashboard open **SQL Editor → New query** and run these three 
    requests, friends' streaks, shared streaks and nudges (see "Friends" below). It turns on the
    `pg_net` extension; if the SQL editor complains about it, enable **pg_net** under
    *Database → Extensions* first and run the file again.
+4. [`migrations/20260101000300_signup_username.sql`](migrations/20260101000300_signup_username.sql): lets
+   people choose their username on the sign-up screen (with a live "available / taken" check). Skipping it
+   is harmless: sign-up still works and people are asked for a username on the Friends screen instead.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all three.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all four.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.
@@ -77,8 +80,10 @@ Re-run both after editing a migration or adding new ones.
 
 ## Friends, shared streaks and nudges
 
-- **Usernames**: each person picks a unique username (3–20 letters, numbers, underscores). Friends are
-  added by exact username only; there is no list or search of users.
+- **Usernames**: each person picks a unique username (3–20 letters, numbers, underscores) on the sign-up
+  screen; it can be changed later from the Friends screen. Friends are added by exact username only; there
+  is no list or search of users. The sign-up screen can ask "is this name free?" before an account exists;
+  that is the only thing signed-out visitors can ask the database.
 - **What friends can see**: username, name, avatar, current/longest streak and whether you have finished
   *today*. Never task titles, task counts or your day-by-day history. Friends' tables are protected by
   row-level security, and the shared-streak maths runs inside the database so it can read both people's

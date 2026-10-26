@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,10 +12,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../../assets/colors/colors";
+import { normalizeUsername, usernameAvailable, USERNAME_RE } from "../friends/api";
 import Button from "../ui/Button";
 import { useAuth } from "./AuthProvider";
 
 type Mode = "signIn" | "signUp";
+type NameStatus = "idle" | "invalid" | "checking" | "ok" | "taken";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,6 +25,8 @@ export default function AuthScreen() {
   const auth = useAuth();
   const [mode, setMode] = useState<Mode>("signIn");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [nameStatus, setNameStatus] = useState<NameStatus>("idle");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,8 +37,33 @@ export default function AuthScreen() {
 
   const isSignUp = mode === "signUp";
 
+  // Tell people right away whether the username is free.
+  useEffect(() => {
+    if (!isSignUp) return;
+    const wanted = normalizeUsername(username);
+    if (!USERNAME_RE.test(wanted)) {
+      setNameStatus(wanted ? "invalid" : "idle");
+      return;
+    }
+    setNameStatus("checking");
+    let stale = false;
+    const t = setTimeout(async () => {
+      const free = await usernameAvailable(wanted);
+      if (!stale) setNameStatus(free === null ? "idle" : free ? "ok" : "taken");
+    }, 450);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [username, isSignUp]);
+
   const validate = () => {
     if (!EMAIL_RE.test(email.trim())) return "Enter a valid email address.";
+    if (isSignUp) {
+      if (!USERNAME_RE.test(normalizeUsername(username)))
+        return "Choose a username: 3–20 letters, numbers or underscores.";
+      if (nameStatus === "taken") return "That username isn't available. Try another.";
+    }
     if (password.length < 6) return "Your password needs at least 6 characters.";
     return null;
   };
@@ -47,7 +76,7 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       if (isSignUp) {
-        const r = await auth.signUp(email, password);
+        const r = await auth.signUp(email, password, normalizeUsername(username));
         if (r.error) setError(r.error);
         else if (r.needsConfirmation) setConfirming(true);
       } else {
@@ -144,6 +173,58 @@ export default function AuthScreen() {
                     style={styles.input}
                   />
                 </View>
+
+                {isSignUp && (
+                  <>
+                    <Text style={styles.label}>Username</Text>
+                    <View
+                      style={[
+                        styles.field,
+                        nameStatus === "taken" && styles.fieldBad,
+                        nameStatus === "ok" && styles.fieldOk,
+                      ]}
+                    >
+                      <Text style={styles.at}>@</Text>
+                      <TextInput
+                        value={username}
+                        onChangeText={(t) => {
+                          setUsername(t.replace(/[^a-zA-Z0-9_]/g, ""));
+                          setError(null);
+                        }}
+                        placeholder="choose_a_username"
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoComplete="username-new"
+                        textContentType="username"
+                        maxLength={20}
+                        returnKeyType="next"
+                        style={styles.input}
+                      />
+                      {nameStatus === "ok" && (
+                        <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                      )}
+                      {nameStatus === "taken" && (
+                        <Ionicons name="close-circle" size={20} color={colors.danger} />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.hint,
+                        nameStatus === "taken" && { color: colors.danger },
+                        nameStatus === "ok" && { color: colors.success },
+                      ]}
+                    >
+                      {nameStatus === "checking"
+                        ? "Checking…"
+                        : nameStatus === "ok"
+                        ? `@${normalizeUsername(username)} is available`
+                        : nameStatus === "taken"
+                        ? "That username isn’t available. Try another."
+                        : "Friends add you with this. 3–20 letters, numbers or underscores."}
+                    </Text>
+                  </>
+                )}
 
                 <Text style={styles.label}>Password</Text>
                 <View style={styles.field}>
@@ -263,6 +344,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  at: { fontSize: 16, color: colors.textMuted, marginRight: -6 },
+  fieldBad: { borderColor: colors.danger },
+  fieldOk: { borderColor: colors.success },
+  hint: { marginTop: 6, fontSize: 12, lineHeight: 17, color: colors.textMuted },
   input: {
     flex: 1,
     minWidth: 0,

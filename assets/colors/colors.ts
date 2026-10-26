@@ -12,6 +12,8 @@ export const colors = {
   success: "#34D399",
   successSoft: "rgba(52,211,153,0.14)",
   warning: "#F5A524",
+  streak: "#FF8A3D",
+  streakSoft: "rgba(255,138,61,0.16)",
   textPrimary: "#FFFFFF",
   textMuted: "#9A9AA8",
   textLabel: "#B3BAC5",

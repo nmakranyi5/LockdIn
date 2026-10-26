@@ -20,9 +20,10 @@ export default function HelpHomeScreenModal({
       <HelpList
         items={[
           "With LockdIn, stay on top of your tasks and get things done.",
-          "Use the arrows to switch tasks. Tap the pencil to edit or the trash to delete.",
-          "Tap the ? to reopen this help screen, or the settings icon to manage the app.",
+          "Use the day strip to switch days. Tap a task to edit it, or the trash to delete.",
+          "Tap the ? to reopen this help screen, or the gear to manage the app.",
           "Hit the + button to create your first task and get started.",
+          "Finish every task in a day to grow your 🔥 streak. Tap it to see your profile.",
         ]}
       />
     </ModalCard>

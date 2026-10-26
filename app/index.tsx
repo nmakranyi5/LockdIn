@@ -5,6 +5,9 @@ import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import DayStrip from "../components/DayStrip";
+import ProfileModal from "../components/ProfileModal";
+import StreakChip from "../components/StreakChip";
+import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
@@ -57,6 +60,7 @@ export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+  const [isProfileVisible, setIsProfileVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
@@ -314,6 +318,8 @@ export default function Index() {
     ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
     : 0;
 
+  const { profile, setProfile, stats, todayKey } = useProfile(tasks, loaded, now);
+
   const today = startOfDay(new Date(now));
   const isPast = selectedDay.getTime() < today.getTime();
 
@@ -370,15 +376,33 @@ export default function Index() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
       <View style={styles.topBar}>
-        <IconButton
-          name="help-outline"
-          onPress={() => setIsHelpModalVisible(true)}
-        />
+        <TouchableOpacity
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          onPress={() => setIsProfileVisible(true)}
+          style={styles.avatarButton}
+        >
+          <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
+        </TouchableOpacity>
         <Text style={styles.brandName}>LockdIn</Text>
-        <IconButton
-          name="settings-outline"
-          onPress={() => setIsSettingsModalVisible(true)}
-        />
+        <View style={styles.topRight}>
+          <StreakChip
+            count={stats.current}
+            lit={stats.today === "complete"}
+            onPress={() => setIsProfileVisible(true)}
+          />
+          <IconButton
+            name="help-outline"
+            size={18}
+            onPress={() => setIsHelpModalVisible(true)}
+          />
+          <IconButton
+            name="settings-outline"
+            size={18}
+            onPress={() => setIsSettingsModalVisible(true)}
+          />
+        </View>
       </View>
 
       <View style={styles.dayHeader}>
@@ -419,6 +443,20 @@ export default function Index() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       >
+        {isSameDay(selectedDay, today) &&
+          dayTasks.length > 0 &&
+          stats.today === "complete" && (
+            <View style={styles.banner}>
+              <Ionicons name="flame" size={22} color={colors.streak} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerTitle}>All done for today</Text>
+                <Text style={styles.bannerSub}>
+                  {stats.current} day{stats.current === 1 ? "" : "s"} streak
+                </Text>
+              </View>
+            </View>
+          )}
+
         {dayTasks.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyCircle}>
@@ -518,6 +556,15 @@ export default function Index() {
         onClose={handleCloseHelp}
       />
 
+      <ProfileModal
+        visible={isProfileVisible}
+        onClose={() => setIsProfileVisible(false)}
+        profile={profile}
+        onChange={setProfile}
+        stats={stats}
+        todayKey={todayKey}
+      />
+
       <SettingsModal
         isVisible={isSettingsModalVisible}
         onClose={() => setIsSettingsModalVisible(false)}
@@ -545,6 +592,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 8,
   },
+  avatarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  avatarEmoji: { fontSize: 20 },
+  topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.streakSoft,
+    borderWidth: 1,
+    borderColor: colors.streak,
+  },
+  bannerTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
+  bannerSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
   brandName: {
     fontSize: 20,
     fontWeight: "800",

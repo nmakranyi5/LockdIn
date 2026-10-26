@@ -21,6 +21,7 @@ type AddTaskModalProps = {
   onClose: () => void;
   onSave: (taskData: any) => void;
   initialTask?: any | null;
+  defaultDate?: Date;
 };
 
 export default function AddTaskModal({
@@ -28,6 +29,7 @@ export default function AddTaskModal({
   onClose,
   onSave,
   initialTask,
+  defaultDate,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
   const [repeats, setRepeats] = useState("");
@@ -42,6 +44,40 @@ export default function AddTaskModal({
   const [showEndTime, setShowEndTime] = useState(!isAndroid);
   const [showStartDate, setShowStartDate] = useState(!isAndroid);
   const [showEndDate, setShowEndDate] = useState(!isAndroid);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    if (initialTask) {
+      setTitle(initialTask.title ?? "");
+      setStartDate(new Date(initialTask.startDate));
+      setStartTime(new Date(initialTask.startDate));
+      setEndDate(new Date(initialTask.endDate));
+      setEndTime(new Date(initialTask.endDate));
+      return;
+    }
+
+    const base = new Date();
+    base.setSeconds(0, 0);
+    const day = defaultDate ? new Date(defaultDate) : new Date(base);
+    const isToday = day.toDateString() === base.toDateString();
+
+    // Today: start next minute. Any other day: start at 9:00.
+    const start = new Date(day);
+    if (isToday) {
+      start.setHours(base.getHours(), base.getMinutes() + 1, 0, 0);
+    } else {
+      start.setHours(9, 0, 0, 0);
+    }
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+
+    setTitle("");
+    setStartDate(start);
+    setStartTime(start);
+    setEndDate(end);
+    setEndTime(end);
+  }, [isVisible]);
 
   const formatDate = (d: Date) => d.toLocaleDateString();
 

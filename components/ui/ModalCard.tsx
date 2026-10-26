@@ -3,8 +3,10 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { colors, radius } from "../../assets/colors/colors";
@@ -14,6 +16,7 @@ type ModalCardProps = {
   title?: string;
   headerRight?: ReactNode;
   maxWidth?: number;
+  scroll?: boolean;
   children?: ReactNode;
   footer?: ReactNode;
   // Rendered inside the Modal so nested modals stack correctly on iOS.
@@ -25,10 +28,24 @@ export default function ModalCard({
   title,
   headerRight,
   maxWidth = 440,
+  scroll,
   children,
   footer,
   overlay,
 }: ModalCardProps) {
+  const { height } = useWindowDimensions();
+  const body = scroll ? (
+    <ScrollView
+      style={{ maxHeight: height * 0.58 }}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {children}
+    </ScrollView>
+  ) : (
+    children
+  );
+
   return (
     <Modal animationType="fade" transparent visible={visible}>
       <KeyboardAvoidingView
@@ -43,7 +60,7 @@ export default function ModalCard({
                 {headerRight}
               </View>
             ) : null}
-            <View style={styles.body}>{children}</View>
+            <View style={styles.body}>{body}</View>
             {footer ? <View style={styles.footer}>{footer}</View> : null}
           </View>
         </View>

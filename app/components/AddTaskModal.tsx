@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Platform,
   StyleSheet,
@@ -14,6 +14,23 @@ import { colors, radius } from "../../assets/colors/colors";
 import Button from "../../components/ui/Button";
 import IconButton from "../../components/ui/IconButton";
 import ModalCard from "../../components/ui/ModalCard";
+import Chips from "../../components/ui/Chips";
+import WebPicker from "../../components/ui/WebPicker";
+import {
+  KIND_OPTIONS,
+  PRIORITY_OPTIONS,
+  REPEAT_OPTIONS,
+} from "../../components/taskMeta";
+import {
+  ChecklistItem,
+  kindOf,
+  newId,
+  Priority,
+  priorityOf,
+  repeatOf,
+  Repeat,
+  TaskKind,
+} from "../../components/taskState";
 import HelpTaskScreenModal from "./HelpTaskScreenModal";
 
 type AddTaskModalProps = {
@@ -32,7 +49,11 @@ export default function AddTaskModal({
   defaultDate,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
-  const [repeats, setRepeats] = useState("");
+  const [repeats, setRepeats] = useState<Repeat>("none");
+  const [kind, setKind] = useState<TaskKind>("timer");
+  const [priority, setPriority] = useState<Priority>("normal");
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [itemsError, setItemsError] = useState(false);
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
   const [startDate, setStartDate] = useState(new Date());
@@ -48,7 +69,21 @@ export default function AddTaskModal({
   useEffect(() => {
     if (!isVisible) return;
 
+    setItemsError(false);
+    lastDuration.current = 60 * 60_000;
+
     if (initialTask) {
+      const wasDone = !!initialTask.completedAt;
+      setKind(kindOf(initialTask));
+      setPriority(priorityOf(initialTask));
+      setRepeats(repeatOf(initialTask));
+      // Rescheduling a finished task starts its checklist over.
+      setItems(
+        (initialTask.items ?? []).map((i: ChecklistItem) => ({
+          ...i,
+          done: wasDone ? false : i.done,
+        }))
+      );
       setTitle(initialTask.title ?? "");
       setStartDate(new Date(initialTask.startDate));
       setStartTime(new Date(initialTask.startDate));
@@ -72,6 +107,10 @@ export default function AddTaskModal({
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
 
+    setKind("timer");
+    setPriority("normal");
+    setRepeats("none");
+    setItems([]);
     setTitle("");
     setStartDate(start);
     setStartTime(start);
@@ -184,8 +223,12 @@ export default function AddTaskModal({
     checkFirstLaunch();
   }, []);
 
+  // Past start times are only off limits for new tasks and reschedules;
+  // editing a task that already started must not move its start to "now".
+  const clampStart = !initialTask || !!initialTask.completedAt;
+
   useEffect(() => {
-    if (!isAndroid) return;
+    if (Platform.OS === "ios" || !clampStart) return;
 
     const nowDate = new Date();
     nowDate.setSeconds(0, 0);
@@ -199,6 +242,27 @@ export default function AddTaskModal({
       return normalized < minStart ? minStart : normalized;
     });
   }, [startDate, now]);
+
+  const isWeb = Platform.OS === "web";
+
+  // The pickers only limit what can be chosen for the deadline, not what
+  // happens to it when the start moves. If the start passes the deadline,
+  // push the deadline out and keep the task's previous length.
+  const lastDuration = useRef(60 * 60_000);
+  useEffect(() => {
+    const start = new Date(startDate);
+    start.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+    const end = new Date(endDate);
+    end.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+
+    if (end.getTime() <= start.getTime()) {
+      const fixed = new Date(start.getTime() + lastDuration.current);
+      setEndDate(fixed);
+      setEndTime(fixed);
+    } else {
+      lastDuration.current = end.getTime() - start.getTime();
+    }
+  }, [startDate, startTime, endDate, endTime]);
 
   function normalize(date: Date) {
     const d = new Date(date);
@@ -240,6 +304,7 @@ export default function AddTaskModal({
   }, []);
 
   useEffect(() => {
+    if (!clampStart) return;
     const currentTime = new Date(now);
     currentTime.setSeconds(0, 0);
 
@@ -271,10 +336,19 @@ export default function AddTaskModal({
   };
 
   const handleSave = () => {
+    const cleanItems =
+      kind === "checklist" ? items.filter((i) => i.text.trim()) : [];
+    if (kind === "checklist" && cleanItems.length === 0) {
+      setItemsError(true);
+      return;
+    }
+
     const combinedStartDate = new Date(startDate);
     combinedStartDate.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
 
-    const finalStart = roundMinute(combinedStartDate);
+    const finalStart = clampStart
+      ? roundMinute(combinedStartDate)
+      : combinedStartDate;
 
     const combinedEndDate = new Date(endDate);
     combinedEndDate.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
@@ -286,9 +360,18 @@ export default function AddTaskModal({
       startDate: finalStart,
       endDate: combinedEndDate,
       repeats,
+      kind,
+      priority,
+      items: cleanItems.map((i) => ({ ...i, text: i.text.trim() })),
     });
 
     onClose();
+  };
+
+  const startOfToday = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   };
 
   const startEndMinDeadline = () => {
@@ -312,6 +395,8 @@ export default function AddTaskModal({
           <IconButton name="close" size={18} onPress={onClose} />
         </View>
       }
+      scroll
+      maxWidth={480}
       footer={<Button label="Save" onPress={handleSave} />}
       overlay={
         <HelpTaskScreenModal
@@ -331,7 +416,82 @@ export default function AddTaskModal({
         />
       </View>
 
+      <Text style={styles.label}>Type</Text>
+      <Chips options={KIND_OPTIONS} value={kind} onChange={setKind} />
+      <Text style={[styles.hint, { marginTop: 8 }]}>
+        {KIND_OPTIONS.find((o) => o.value === kind)?.hint}
+      </Text>
+
+      {kind === "checklist" && (
+        <View style={styles.checklist}>
+          {items.map((item, idx) => (
+            <View key={item.id} style={styles.itemRow}>
+              <Ionicons
+                name="square-outline"
+                size={20}
+                color={colors.textMuted}
+              />
+              <TextInput
+                value={item.text}
+                placeholder={`Item ${idx + 1}`}
+                placeholderTextColor={colors.textMuted}
+                style={styles.itemInput}
+                onChangeText={(text) => {
+                  setItemsError(false);
+                  setItems((prev) =>
+                    prev.map((i) => (i.id === item.id ? { ...i, text } : i))
+                  );
+                }}
+              />
+              <TouchableOpacity
+                hitSlop={10}
+                onPress={() =>
+                  setItems((prev) => prev.filter((i) => i.id !== item.id))
+                }
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.addItem}
+            onPress={() =>
+              setItems((prev) => [
+                ...prev,
+                { id: newId(), text: "", done: false },
+              ])
+            }
+          >
+            <Ionicons name="add" size={18} color={colors.accent} />
+            <Text style={styles.addItemText}>Add item</Text>
+          </TouchableOpacity>
+          {itemsError && (
+            <Text style={styles.error}>Add at least one checklist item.</Text>
+          )}
+        </View>
+      )}
+
       <Text style={styles.label}>Start</Text>
+      {isWeb ? (
+        <View style={styles.pickerRow}>
+          <WebPicker
+            type="date"
+            value={startDate}
+            min={startOfToday()}
+            onChange={setStartDate}
+          />
+          <WebPicker
+            type="time"
+            value={startTime}
+            min={
+              startDate.toDateString() === now.toDateString()
+                ? getMinStartTime()
+                : undefined
+            }
+            onChange={(t) => setStartTime(normalize(t))}
+          />
+        </View>
+      ) : (
       <View style={styles.pickerRow}>
         <TouchableOpacity
           style={isAndroid ? styles.field : undefined}
@@ -376,7 +536,25 @@ export default function AddTaskModal({
         </TouchableOpacity>
       </View>
 
+      )}
+
       <Text style={styles.label}>Deadline</Text>
+      {isWeb ? (
+        <View style={styles.pickerRow}>
+          <WebPicker
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={setEndDate}
+          />
+          <WebPicker
+            type="time"
+            value={endTime}
+            min={startEndMinDeadline()}
+            onChange={(t) => setEndTime(normalize(t))}
+          />
+        </View>
+      ) : (
       <View style={styles.pickerRow}>
         <TouchableOpacity
           style={isAndroid ? styles.field : undefined}
@@ -417,6 +595,14 @@ export default function AddTaskModal({
         </TouchableOpacity>
       </View>
 
+      )}
+
+      <Text style={styles.label}>Priority</Text>
+      <Chips options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} />
+
+      <Text style={styles.label}>Repeat</Text>
+      <Chips options={REPEAT_OPTIONS} value={repeats} onChange={setRepeats} />
+
       <Text style={styles.hint}>
         Pickers automatically adjust to prevent selecting times that have
         already passed.
@@ -453,7 +639,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     outlineColor: "transparent",
     outlineWidth: 0,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
+  checklist: { marginTop: 12, gap: 8 },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  itemInput: {
+    flex: 1,
+    height: 44,
+    color: colors.textPrimary,
+    fontSize: 15,
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
+  },
+  addItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  addItemText: { color: colors.accent, fontSize: 15, fontWeight: "600" },
+  error: { color: colors.danger, fontSize: 13 },
   hint: {
     color: colors.textMuted,
     fontSize: 12,

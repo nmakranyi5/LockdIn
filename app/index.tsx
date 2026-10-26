@@ -15,7 +15,7 @@ import { colors, radius } from "../assets/colors/colors";
 import CheckInModal from "../components/CheckInModal";
 import DayStrip from "../components/DayStrip";
 import ProfileModal from "../components/ProfileModal";
-import StreakChip from "../components/StreakChip";
+import ProfileBubble from "../components/ProfileBubble";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
@@ -484,18 +484,9 @@ export default function Index() {
           LockdIn
         </Text>
         <View style={[styles.topSide, styles.topRight]}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Profile"
-            onPress={() => setIsProfileVisible(true)}
-            style={styles.avatarButton}
-          >
-            <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
-          </TouchableOpacity>
-          <StreakChip
-            compact
-            count={stats.current}
+          <ProfileBubble
+            avatar={profile.avatar}
+            streak={stats.current}
             lit={stats.today === "complete"}
             onPress={() => setIsProfileVisible(true)}
           />
@@ -684,18 +675,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 8,
   },
-  avatarButton: {
-    flexShrink: 0,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  avatarEmoji: { fontSize: 20 },
   banner: {
     flexDirection: "row",
     alignItems: "center",

@@ -472,35 +472,32 @@ export default function Index() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
       <View style={styles.topBar}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          onPress={() => setIsProfileVisible(true)}
-          style={styles.avatarButton}
-        >
-          <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
-        </TouchableOpacity>
-        <Text style={styles.brandName} numberOfLines={1}>
-          LockdIn
-        </Text>
-        <View style={styles.topRight}>
-          <StreakChip
-            count={stats.current}
-            lit={stats.today === "complete"}
-            onPress={() => setIsProfileVisible(true)}
-          />
-          <IconButton
-            name="help-outline"
-            label="Help"
-            size={18}
-            onPress={() => setIsHelpModalVisible(true)}
-          />
+        <View style={[styles.topSide, { alignItems: "flex-start" }]}>
           <IconButton
             name="settings-outline"
             label="Settings"
             size={18}
             onPress={() => setIsSettingsModalVisible(true)}
+          />
+        </View>
+        <Text style={styles.brandName} numberOfLines={1}>
+          LockdIn
+        </Text>
+        <View style={[styles.topSide, styles.topRight]}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Profile"
+            onPress={() => setIsProfileVisible(true)}
+            style={styles.avatarButton}
+          >
+            <Text style={styles.avatarEmoji}>{profile.avatar}</Text>
+          </TouchableOpacity>
+          <StreakChip
+            compact
+            count={stats.current}
+            lit={stats.today === "complete"}
+            onPress={() => setIsProfileVisible(true)}
           />
         </View>
       </View>
@@ -650,6 +647,11 @@ export default function Index() {
         onClose={handleCloseHelp}
       />
 
+      <SettingsModal
+        isVisible={isSettingsModalVisible}
+        onClose={() => setIsSettingsModalVisible(false)}
+      />
+
       <ProfileModal
         visible={isProfileVisible}
         onClose={() => setIsProfileVisible(false)}
@@ -659,10 +661,6 @@ export default function Index() {
         todayKey={todayKey}
       />
 
-      <SettingsModal
-        isVisible={isSettingsModalVisible}
-        onClose={() => setIsSettingsModalVisible(false)}
-      />
       </View>
     </SafeAreaView>
   );
@@ -698,7 +696,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   avatarEmoji: { fontSize: 20 },
-  topRight: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -711,9 +708,16 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
   bannerSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  // Both sides take equal space so the title sits dead centre.
+  topSide: { flex: 1, minWidth: 0 },
+  topRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+  },
   brandName: {
-    flex: 1,
-    minWidth: 0,
+    flexShrink: 1,
     textAlign: "center",
     marginHorizontal: 8,
     fontSize: 20,

@@ -21,9 +21,9 @@ export default function HelpHomeScreenModal({
         items={[
           "With LockdIn, stay on top of your tasks and get things done.",
           "Use the day strip to switch days. Tap a task to edit it, or the trash to delete.",
-          "Tap the ? to reopen this help screen, or the gear to manage the app.",
+          "You can find this again under Settings → Help (top left).",
           "Hit the + button to create your first task and get started.",
-          "Finish every task in a day to grow your 🔥 streak. Tap it to see your profile.",
+          "Finish every task in a day to grow your 🔥 streak. Tap your avatar (top right) to see your profile.",
         ]}
       />
     </ModalCard>

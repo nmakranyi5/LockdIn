@@ -1,19 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import DayStrip from "../components/DayStrip";
+import * as Notifications from "../components/notifications";
+import {
+  cancelTaskNotifications,
+  scheduleTaskNotifications,
+} from "../components/scheduleTask";
 import TaskCard from "../components/TaskCard";
+import { priorityRank } from "../components/taskMeta";
 import {
   addDays,
+  ChecklistItem,
   getTaskState,
   isSameDay,
+  newId,
+  nextOccurrence,
+  priorityOf,
+  repeatOf,
   startOfDay,
   Task,
 } from "../components/taskState";
-import * as Notifications from "../components/notifications";
 import Button from "../components/ui/Button";
 import IconButton from "../components/ui/IconButton";
 import AddTaskModal from "./components/AddTaskModal";
@@ -30,30 +40,29 @@ Notifications.setNotificationHandler({
   }),
 });
 
+type TaskInput = {
+  title: string;
+  startDate: Date;
+  endDate: Date;
+  repeats: string;
+  kind: Task["kind"];
+  priority: Task["priority"];
+  items: ChecklistItem[];
+};
+
 export default function Index() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
-  const [endIndex, setEndIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [endId, setEndId] = useState<string | null>(null);
+  const spawning = useRef(new Set<string>());
 
   const TASKS_KEY = "@lockdin_tasks";
-
-  const normalizeStartTime = (selected: Date) => {
-    const currentNow = new Date();
-    const normalized = new Date(selected);
-
-    normalized.setSeconds(0, 0);
-
-    if (normalized.getTime() <= currentNow.getTime()) {
-      normalized.setMinutes(normalized.getMinutes() + 1);
-    }
-
-    return normalized;
-  };
 
   const [now, setNow] = useState(Date.now());
 
@@ -62,138 +71,99 @@ export default function Index() {
     return () => clearInterval(id);
   }, []);
 
-  const handleSaveTask = async (task: Task) => {
-    if (editingIndex !== null) {
-      const oldTask = tasks[editingIndex];
-      if (oldTask.startNotificationId)
-        await Notifications.cancelScheduledNotificationAsync(
-          oldTask.startNotificationId
-        );
-      if (oldTask.deadlineNotificationId)
-        await Notifications.cancelScheduledNotificationAsync(
-          oldTask.deadlineNotificationId
-        );
-      if (oldTask.reminderNotificationId)
-        await Notifications.cancelScheduledNotificationAsync(
-          oldTask.reminderNotificationId
-        );
-    }
-    const fireDate = normalizeStartTime(task.startDate);
-    const startMs = fireDate.getTime();
-    let deadlineFireDate = new Date(task.endDate);
-    deadlineFireDate.setSeconds(0, 0);
-    deadlineFireDate.setMilliseconds(0);
+  const findTask = (id: string | null) =>
+    id ? tasks.find((t) => t.id === id) : undefined;
 
-    const nowMs = Date.now();
-    const secondsUntilStart = (startMs - nowMs) / 1000;
-    const secondsUntilFirstReminder = secondsUntilStart + 60;
+  const updateTask = (id: string, patch: Partial<Task>) =>
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
-    if (deadlineFireDate.getTime() <= fireDate.getTime()) {
-      deadlineFireDate = new Date(fireDate.getTime() + 60_000);
-    }
+  const handleSaveTask = async (input: TaskInput) => {
+    const old = findTask(editingId);
+    if (old) cancelTaskNotifications(old);
 
-    const startNotificationId = await Notifications.scheduleNotificationAsync({
-      content: { title: "Time to start task!", body: task.title },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: fireDate,
-      },
-    });
+    // A task that is mid-run keeps running when it is edited; a finished one
+    // is being rescheduled and starts fresh.
+    const keepRunning = !!old && !!old.startedAt && !old.completedAt;
+    const sched = await scheduleTaskNotifications(input, keepRunning);
 
-    const deadlineNotificationId =
-      await Notifications.scheduleNotificationAsync({
-        content: { title: "Task deadline reached!", body: task.title },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: deadlineFireDate,
-        },
-      });
-
-    const reminderNotificationId =
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Hey! Start your task!",
-          body: `You are overdue to start: ${task.title}`,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: Math.max(60, Math.floor(secondsUntilFirstReminder)),
-          repeats: true,
-        },
-      });
-
-    const updatedTask = {
-      ...task,
-      startDate: fireDate,
-      endDate: deadlineFireDate,
-      startNotificationId,
-      deadlineNotificationId,
-      reminderNotificationId,
-      startedAt: null,
-      completedAt: null,
+    const fields = {
+      title: input.title,
+      startDate: sched.startDate,
+      endDate: sched.endDate,
+      repeats: input.repeats,
+      kind: input.kind,
+      priority: input.priority,
+      items: input.items,
+      startNotificationId: sched.startNotificationId,
+      deadlineNotificationId: sched.deadlineNotificationId,
+      reminderNotificationId: sched.reminderNotificationId,
     };
 
-    if (editingIndex !== null) {
-      setTasks((prev) => {
-        const updated = [...prev];
-        updated[editingIndex] = updatedTask;
-        return updated;
+    if (old) {
+      updateTask(old.id, {
+        ...fields,
+        startedAt: keepRunning ? old.startedAt : null,
+        completedAt: null,
+        spawnedNext: old.completedAt ? false : old.spawnedNext,
       });
-      setEditingIndex(null);
+      setEditingId(null);
       confirmEditPushNotification();
     } else {
-      setTasks((prev) => [...prev, updatedTask]);
+      setTasks((prev) => [
+        ...prev,
+        {
+          id: newId(),
+          ...fields,
+          startedAt: null,
+          completedAt: null,
+          spawnedNext: false,
+        },
+      ]);
       confirmAddPushNotification();
     }
-  
-    setSelectedDay(startOfDay(fireDate));
+    setSelectedDay(startOfDay(sched.startDate));
   };
-  const onEdit = (index: number) => {
-    setEditingIndex(index);
+
+  const onEdit = (id: string) => {
+    setEditingId(id);
     setIsModalVisible(true);
   };
 
-  const cancelNotifications = (task?: Task, ...kinds: (keyof Task)[]) => {
-    kinds.forEach((k) => {
-      const id = task?.[k];
-      if (typeof id === "string") {
-        Notifications.cancelScheduledNotificationAsync(id);
-      }
-    });
+  const onDelete = (id: string) => {
+    cancelTaskNotifications(findTask(id));
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const onDelete = (index: number) => {
-    const task = tasks[index];
-    if (!task) return;
-    cancelNotifications(
-      task,
-      "startNotificationId",
-      "deadlineNotificationId",
-      "reminderNotificationId"
-    );
-    setTasks((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const onStartTask = (index: number) => {
-    const task = tasks[index];
+  const onStartTask = (id: string) => {
+    const task = findTask(id);
     if (!task || task.startedAt) return;
-    cancelNotifications(task, "startNotificationId", "reminderNotificationId");
-    setTasks((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], startedAt: Date.now() };
-      return updated;
+    cancelTaskNotifications(task, "startNotificationId", "reminderNotificationId");
+    updateTask(id, { startedAt: Date.now() });
+  };
+
+  const completeTask = (id: string, patch: Partial<Task> = {}) => {
+    const task = findTask(id);
+    if (!task || task.completedAt) return;
+    cancelTaskNotifications(task, "deadlineNotificationId", "reminderNotificationId");
+    updateTask(id, {
+      ...patch,
+      completedAt: Date.now(),
+      startedAt: task.startedAt ?? Date.now(),
     });
   };
 
-  const onEndTask = (index: number) => {
-    const task = tasks[index];
+  const toggleItem = (id: string, itemId: string) => {
+    const task = findTask(id);
     if (!task) return;
-    cancelNotifications(task, "deadlineNotificationId", "reminderNotificationId");
-    setTasks((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], completedAt: Date.now() };
-      return updated;
-    });
+    const items = (task.items ?? []).map((i) =>
+      i.id === itemId ? { ...i, done: !i.done } : i
+    );
+    if (items.length > 0 && items.every((i) => i.done)) {
+      completeTask(id, { items });
+    } else {
+      // Unticking an item reopens a completed checklist.
+      updateTask(id, { items, ...(task.completedAt ? { completedAt: null } : {}) });
+    }
   };
 
   const handleCloseHelp = async () => {
@@ -241,22 +211,70 @@ export default function Index() {
       if (saved) {
         const parsed: Task[] = JSON.parse(saved).map((t: any) => ({
           ...t,
+          id: t.id ?? newId(),
           startDate: new Date(t.startDate),
           endDate: new Date(t.endDate),
         }));
 
         setTasks(parsed);
       }
+      setLoaded(true);
     };
     loadTasks();
   }, []);
 
   useEffect(() => {
-    const saveTasks = async () => {
-      await AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+    if (!loaded) return;
+    AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  }, [tasks, loaded]);
+
+  const spawnNext = async (task: Task) => {
+    spawning.current.add(task.id);
+    const occurrence = nextOccurrence(task, Date.now());
+    if (!occurrence) {
+      updateTask(task.id, { spawnedNext: true });
+      return;
+    }
+    const sched = await scheduleTaskNotifications({ ...task, ...occurrence });
+    const next: Task = {
+      ...task,
+      id: newId(),
+      startDate: sched.startDate,
+      endDate: sched.endDate,
+      startNotificationId: sched.startNotificationId,
+      deadlineNotificationId: sched.deadlineNotificationId,
+      reminderNotificationId: sched.reminderNotificationId,
+      startedAt: null,
+      completedAt: null,
+      spawnedNext: false,
+      items: task.items?.map((i) => ({ ...i, done: false })),
     };
-    saveTasks();
-  }, [tasks]);
+    setTasks((prev) => {
+      // The source task may have been deleted while this was scheduling.
+      if (!prev.some((t) => t.id === task.id)) {
+        cancelTaskNotifications(next);
+        return prev;
+      }
+      return [
+        ...prev.map((t) => (t.id === task.id ? { ...t, spawnedNext: true } : t)),
+        next,
+      ];
+    });
+  };
+
+  // Repeating tasks: once an occurrence has started (or been completed), line
+  // up the next one so it shows on its day.
+  const minuteBucket = Math.floor(now / 60_000);
+  useEffect(() => {
+    if (!loaded) return;
+    tasks.forEach((task) => {
+      if (repeatOf(task) === "none" || task.spawnedNext) return;
+      if (spawning.current.has(task.id)) return;
+      const startMs = new Date(task.startDate).getTime();
+      if (!task.completedAt && Date.now() < startMs) return;
+      spawnNext(task);
+    });
+  }, [tasks, loaded, minuteBucket]);
 
   useEffect(() => {
     const checkFirstLaunch = async () => {
@@ -280,18 +298,22 @@ export default function Index() {
   const dayTasks = useMemo(
     () =>
       tasks
-        .map((task, index) => ({ task, index }))
-        .filter(({ task }) => isSameDay(new Date(task.startDate), selectedDay))
-        .sort(
-          (a, b) =>
-            new Date(a.task.startDate).getTime() -
-            new Date(b.task.startDate).getTime()
-        ),
+        .filter((task) => isSameDay(new Date(task.startDate), selectedDay))
+        .sort((a, b) => {
+          // Open tasks first, then by priority, then by start time.
+          const done = Number(!!a.completedAt) - Number(!!b.completedAt);
+          if (done) return done;
+          const pr = priorityRank[priorityOf(b)] - priorityRank[priorityOf(a)];
+          if (pr) return pr;
+          return (
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+          );
+        }),
     [tasks, selectedDay]
   );
 
   const doneCount = dayTasks.filter(
-    ({ task }) => getTaskState(task, now).isDone
+    (task) => getTaskState(task, now).isDone
   ).length;
 
   const hasTasks = (d: Date) =>
@@ -318,7 +340,7 @@ export default function Index() {
   };
 
   const openAdd = () => {
-    setEditingIndex(null);
+    setEditingId(null);
     setIsModalVisible(true);
   };
 
@@ -390,16 +412,18 @@ export default function Index() {
             </Text>
           </View>
         ) : (
-          dayTasks.map(({ task, index }) => (
+          dayTasks.map((task) => (
             <TaskCard
-              key={`${index}-${task.title}-${new Date(task.startDate).getTime()}`}
+              key={task.id}
               task={task}
               now={now}
-              onPress={() => onEdit(index)}
-              onStart={() => onStartTask(index)}
-              onEnd={() => setEndIndex(index)}
-              onReschedule={() => onEdit(index)}
-              onDelete={() => setDeleteIndex(index)}
+              onPress={() => onEdit(task.id)}
+              onStart={() => onStartTask(task.id)}
+              onEnd={() => setEndId(task.id)}
+              onDone={() => completeTask(task.id)}
+              onToggleItem={(itemId) => toggleItem(task.id, itemId)}
+              onReschedule={() => onEdit(task.id)}
+              onDelete={() => setDeleteId(task.id)}
             />
           ))
         )}
@@ -420,35 +444,35 @@ export default function Index() {
         onClose={() => {
           setIsModalVisible(false);
           setTimeout(() => {
-            setEditingIndex(null);
+            setEditingId(null);
           }, 0);
         }}
-        initialTask={editingIndex !== null ? tasks[editingIndex] : null}
+        initialTask={findTask(editingId) ?? null}
         defaultDate={selectedDay}
         onSave={handleSaveTask}
       />
 
       <ConfirmModal
-        visible={deleteIndex !== null}
+        visible={deleteId !== null}
         title="Delete Task?"
         message="This action cannot be undone."
         confirmText="Delete"
-        onCancel={() => setDeleteIndex(null)}
+        onCancel={() => setDeleteId(null)}
         onConfirm={() => {
-          if (deleteIndex !== null) onDelete(deleteIndex);
-          setDeleteIndex(null);
+          if (deleteId !== null) onDelete(deleteId);
+          setDeleteId(null);
         }}
       />
 
       <ConfirmModal
-        visible={endIndex !== null}
+        visible={endId !== null}
         title="End Task?"
         message="Are you sure that the task is done? Be honest. 🙏"
         confirmText="End Task"
-        onCancel={() => setEndIndex(null)}
+        onCancel={() => setEndId(null)}
         onConfirm={() => {
-          if (endIndex !== null) onEndTask(endIndex);
-          setEndIndex(null);
+          if (endId !== null) completeTask(endId);
+          setEndId(null);
         }}
       />
 

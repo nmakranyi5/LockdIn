@@ -20,10 +20,10 @@ export default function HelpTaskScreenModal({
       <HelpList
         items={[
           "Here, you can manage a task.",
-          "First, input a name for the task.",
+          "First, input a name and pick a type: Timer, Checklist, or One & done.",
           "Next, set the start date and time using the pickers.",
           "Then, set the deadline date and time with the pickers.",
-          "Finally, hit the save button to finish managing the task.",
+          "Set a priority and optionally a repeat, then hit save.",
         ]}
       />
     </ModalCard>

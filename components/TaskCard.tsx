@@ -1,7 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors, radius } from "../assets/colors/colors";
-import { formatClock, formatMs, getTaskState, Task } from "./taskState";
+import { kindMeta, priorityMeta, repeatLabel } from "./taskMeta";
+import {
+  formatClock,
+  formatMs,
+  getTaskState,
+  kindOf,
+  priorityOf,
+  repeatOf,
+  Task,
+} from "./taskState";
 
 type TaskCardProps = {
   task: Task;
@@ -9,6 +18,8 @@ type TaskCardProps = {
   onPress: () => void;
   onStart: () => void;
   onEnd: () => void;
+  onDone: () => void;
+  onToggleItem: (itemId: string) => void;
   onReschedule: () => void;
   onDelete: () => void;
 };
@@ -19,12 +30,22 @@ export default function TaskCard({
   onPress,
   onStart,
   onEnd,
+  onDone,
+  onToggleItem,
   onReschedule,
   onDelete,
 }: TaskCardProps) {
   const s = getTaskState(task, now);
+  const kind = kindOf(task);
+  const priority = priorityOf(task);
+  const repeat = repeatOf(task);
+  const pMeta = priorityMeta(priority);
+  const kMeta = kindMeta(kind);
+  const items = task.items ?? [];
+  const checked = items.filter((i) => i.done).length;
   const started = !!task.startedAt;
   const completed = !!task.completedAt;
+  const showAccent = priority !== "normal";
 
   return (
     <TouchableOpacity
@@ -32,6 +53,10 @@ export default function TaskCard({
       onPress={onPress}
       style={[styles.card, s.isDone && styles.cardDone]}
     >
+      {showAccent && (
+        <View style={[styles.accent, { backgroundColor: pMeta.color }]} />
+      )}
+
       <View style={styles.topRow}>
         <Text style={styles.range}>
           {formatClock(task.startDate)} – {formatClock(task.endDate)}
@@ -56,31 +81,64 @@ export default function TaskCard({
         {task.title || "Untitled task"}
       </Text>
 
+      <View style={styles.tags}>
+        <Tag
+          icon={kMeta.icon}
+          text={
+            kind === "checklist" && items.length > 0
+              ? `${checked}/${items.length}`
+              : kMeta.label
+          }
+        />
+        {priority !== "normal" && (
+          <Tag icon={pMeta.icon} text={pMeta.label} color={pMeta.color} />
+        )}
+        {repeat !== "none" && <Tag icon="repeat" text={repeatLabel(repeat)} />}
+      </View>
+
+      {kind === "checklist" && items.length > 0 && (
+        <View style={styles.items}>
+          {items.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.7}
+              style={styles.itemRow}
+              onPress={() => onToggleItem(item.id)}
+            >
+              <Ionicons
+                name={item.done ? "checkbox" : "square-outline"}
+                size={22}
+                color={item.done ? colors.success : colors.textMuted}
+              />
+              <Text
+                style={[styles.itemText, item.done && styles.itemTextDone]}
+                numberOfLines={2}
+              >
+                {item.text}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <View style={styles.bottomRow}>
         <View style={styles.timerWrap}>
           <Text style={styles.timerLabel}>{s.label}</Text>
           <Text
             style={[styles.timer, s.isOverdue && { color: colors.danger }]}
           >
-            {formatMs(s.timeMs)}
+            {s.valueText ?? formatMs(s.timeMs)}
           </Text>
         </View>
 
-        {!started && !completed && (
-          <ActionButton
-            label="Start"
-            icon="play"
-            bg={colors.accent}
-            onPress={onStart}
-          />
+        {kind === "timer" && !started && !completed && (
+          <ActionButton label="Start" icon="play" bg={colors.accent} onPress={onStart} />
         )}
-        {started && !completed && (
-          <ActionButton
-            label="End"
-            icon="stop"
-            bg={colors.danger}
-            onPress={onEnd}
-          />
+        {kind === "timer" && started && !completed && (
+          <ActionButton label="End" icon="stop" bg={colors.danger} onPress={onEnd} />
+        )}
+        {kind === "oneshot" && !completed && (
+          <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
         )}
         {completed && (
           <ActionButton
@@ -100,13 +158,35 @@ export default function TaskCard({
               styles.fill,
               {
                 width: `${s.progress * 100}%`,
-                backgroundColor: s.isOverdue ? colors.danger : colors.accent,
+                backgroundColor:
+                  kind === "checklist"
+                    ? colors.success
+                    : s.isOverdue
+                    ? colors.danger
+                    : colors.accent,
               },
             ]}
           />
         </View>
       )}
     </TouchableOpacity>
+  );
+}
+
+function Tag({
+  icon,
+  text,
+  color = colors.textMuted,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  text: string;
+  color?: string;
+}) {
+  return (
+    <View style={styles.tag}>
+      <Ionicons name={icon} size={12} color={color} />
+      <Text style={[styles.tagText, { color }]}>{text}</Text>
+    </View>
   );
 }
 
@@ -146,6 +226,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   cardDone: { opacity: 0.7 },
+  accent: { position: "absolute", left: 0, top: 0, bottom: 0, width: 4 },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -169,10 +250,27 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     color: colors.textPrimary,
   },
-  titleDone: {
-    textDecorationLine: "line-through",
-    color: colors.textMuted,
+  titleDone: { textDecorationLine: "line-through", color: colors.textMuted },
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
   },
+  tagText: { fontSize: 12, fontWeight: "600" },
+  items: { gap: 4 },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 6,
+  },
+  itemText: { flex: 1, fontSize: 16, color: colors.textPrimary },
+  itemTextDone: { color: colors.textMuted, textDecorationLine: "line-through" },
   bottomRow: {
     flexDirection: "row",
     alignItems: "flex-end",

@@ -3,23 +3,31 @@ import { kindOf, Task } from "./taskState";
 
 type Schedulable = Pick<Task, "title" | "startDate" | "endDate" | "kind">;
 
-export const normalizeStartTime = (selected: Date) => {
-  const normalized = new Date(selected);
-  normalized.setSeconds(0, 0);
-  if (normalized.getTime() <= Date.now()) {
-    normalized.setMinutes(normalized.getMinutes() + 1);
-  }
-  return normalized;
-};
+// Follow-up nudges after the start time for a timer task that hasn't been
+// started. Finite on purpose: they stop at the deadline.
+const REMINDER_OFFSETS_MIN = [5, 15, 30, 60];
 
-// Schedules the start / deadline / "overdue to start" notifications and
-// returns the normalized dates alongside their ids. Pass `started` for tasks
-// that are already running so the start nags are skipped.
+// A trigger date must be comfortably in the future to be schedulable.
+const isFuture = (d: Date) => d.getTime() > Date.now() + 2000;
+
+const at = (title: string, body: string, date: Date) =>
+  Notifications.scheduleNotificationAsync({
+    content: { title, body },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date,
+    },
+  });
+
+// Schedules the start / follow-up / deadline notifications. Dates are never
+// moved: anything whose time has already passed is simply not scheduled.
+// Pass `started` for tasks that are already running so start alerts are skipped.
 export async function scheduleTaskNotifications(
   task: Schedulable,
   started = false
 ) {
-  const startDate = normalizeStartTime(task.startDate);
+  const startDate = new Date(task.startDate);
+  startDate.setSeconds(0, 0);
   let endDate = new Date(task.endDate);
   endDate.setSeconds(0, 0);
   if (endDate.getTime() <= startDate.getTime()) {
@@ -28,57 +36,68 @@ export async function scheduleTaskNotifications(
 
   const ids: Pick<
     Task,
-    "startNotificationId" | "deadlineNotificationId" | "reminderNotificationId"
+    "startNotificationId" | "deadlineNotificationId" | "reminderNotificationIds"
   > = {};
 
   if (!started) {
-    ids.startNotificationId = await Notifications.scheduleNotificationAsync({
-      content: { title: "Time to start task!", body: task.title },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: startDate,
-      },
-    });
-
-    // Only timer tasks have a "start" action to nag about.
-    if (kindOf(task as Task) === "timer") {
-      const secondsUntilStart = (startDate.getTime() - Date.now()) / 1000;
-      ids.reminderNotificationId = await Notifications.scheduleNotificationAsync(
-        {
-          content: {
-            title: "Hey! Start your task!",
-            body: `You are overdue to start: ${task.title}`,
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-            seconds: Math.max(60, Math.floor(secondsUntilStart + 60)),
-            repeats: true,
-          },
-        }
+    if (isFuture(startDate)) {
+      ids.startNotificationId = await at(
+        "Time to start task!",
+        task.title,
+        startDate
       );
+    }
+
+    // Only timer tasks have a "start" action to nudge about.
+    if (kindOf(task as Task) === "timer") {
+      const reminders: string[] = [];
+      for (const minutes of REMINDER_OFFSETS_MIN) {
+        const when = new Date(startDate.getTime() + minutes * 60_000);
+        if (isFuture(when) && when.getTime() < endDate.getTime()) {
+          reminders.push(
+            await at(
+              "Hey! Start your task!",
+              `You are overdue to start: ${task.title}`,
+              when
+            )
+          );
+        }
+      }
+      if (reminders.length) ids.reminderNotificationIds = reminders;
     }
   }
 
-  ids.deadlineNotificationId = await Notifications.scheduleNotificationAsync({
-    content: { title: "Task deadline reached!", body: task.title },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: endDate,
-    },
-  });
+  if (isFuture(endDate)) {
+    ids.deadlineNotificationId = await at(
+      "Task deadline reached!",
+      task.title,
+      endDate
+    );
+  }
 
   return { startDate, endDate, ...ids };
 }
 
-export function cancelTaskNotifications(
-  task: Task | undefined,
-  ...kinds: ("startNotificationId" | "deadlineNotificationId" | "reminderNotificationId")[]
-) {
-  const all = kinds.length
-    ? kinds
-    : (["startNotificationId", "deadlineNotificationId", "reminderNotificationId"] as const);
-  all.forEach((k) => {
-    const id = task?.[k];
-    if (id) Notifications.cancelScheduledNotificationAsync(id);
-  });
+// Used when a finished task is reopened.
+export async function scheduleDeadlineNotification(task: Task) {
+  const end = new Date(task.endDate);
+  end.setSeconds(0, 0);
+  return isFuture(end)
+    ? at("Task deadline reached!", task.title, end)
+    : undefined;
+}
+
+type Kind = "start" | "deadline" | "reminders";
+
+export function cancelTaskNotifications(task: Task | undefined, ...which: Kind[]) {
+  if (!task) return;
+  const kinds = which.length ? which : (["start", "deadline", "reminders"] as Kind[]);
+  const ids: (string | undefined)[] = [];
+  if (kinds.includes("start")) ids.push(task.startNotificationId);
+  if (kinds.includes("deadline")) ids.push(task.deadlineNotificationId);
+  if (kinds.includes("reminders")) {
+    // reminderNotificationId is the old single repeating reminder.
+    ids.push(task.reminderNotificationId, ...(task.reminderNotificationIds ?? []));
+  }
+  ids.forEach((id) => id && Notifications.cancelScheduledNotificationAsync(id));
 }

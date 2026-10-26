@@ -19,7 +19,8 @@ export type Task = {
   seriesId?: string;
   startNotificationId?: string;
   deadlineNotificationId?: string;
-  reminderNotificationId?: string;
+  reminderNotificationId?: string; // legacy single repeating reminder
+  reminderNotificationIds?: string[];
   startedAt?: number | null;
   completedAt?: number | null;
 };

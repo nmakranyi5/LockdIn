@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import DayStrip from "../components/DayStrip";
 import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
+  scheduleDeadlineNotification,
   scheduleTaskNotifications,
 } from "../components/scheduleTask";
 import TaskCard from "../components/TaskCard";
@@ -98,7 +99,8 @@ export default function Index() {
       items: input.items,
       startNotificationId: sched.startNotificationId,
       deadlineNotificationId: sched.deadlineNotificationId,
-      reminderNotificationId: sched.reminderNotificationId,
+      reminderNotificationId: undefined,
+      reminderNotificationIds: sched.reminderNotificationIds,
     };
 
     if (old) {
@@ -108,7 +110,6 @@ export default function Index() {
         completedAt: null,
       });
       setEditingId(null);
-      confirmEditPushNotification();
     } else {
       setTasks((prev) => [
         ...prev,
@@ -120,7 +121,6 @@ export default function Index() {
           spawnedNext: false,
         },
       ]);
-      confirmAddPushNotification();
     }
     setSelectedDay(startOfDay(sched.startDate));
   };
@@ -155,14 +155,15 @@ export default function Index() {
   const onStartTask = (id: string) => {
     const task = findTask(id);
     if (!task || task.startedAt) return;
-    cancelTaskNotifications(task, "startNotificationId", "reminderNotificationId");
+    cancelTaskNotifications(task, "start", "reminders");
     updateTask(id, { startedAt: Date.now() });
   };
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
     const task = findTask(id);
     if (!task || task.completedAt) return;
-    cancelTaskNotifications(task, "deadlineNotificationId", "reminderNotificationId");
+    // Cancel everything, including a start alert that hasn't fired yet.
+    cancelTaskNotifications(task);
     updateTask(id, {
       ...patch,
       completedAt: Date.now(),
@@ -181,6 +182,11 @@ export default function Index() {
     } else {
       // Unticking an item reopens a completed checklist.
       updateTask(id, { items, ...(task.completedAt ? { completedAt: null } : {}) });
+      if (task.completedAt) {
+        scheduleDeadlineNotification(task).then((deadlineNotificationId) =>
+          updateTask(id, { deadlineNotificationId })
+        );
+      }
     }
   };
 
@@ -193,34 +199,17 @@ export default function Index() {
     }
   };
 
-  async function confirmAddPushNotification() {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Task Added!",
-        body: "Successfully added task!",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 2,
-      },
-    });
-  }
-
-  async function confirmEditPushNotification() {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Task Edited!",
-        body: "Successfully edited task!",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 2,
-      },
-    });
-  }
-
   useEffect(() => {
-    Notifications.requestPermissionsAsync();
+    (async () => {
+      // Android 13+ only shows the permission prompt once a channel exists.
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Task alerts",
+          importance: Notifications.AndroidImportance.MAX,
+        });
+      }
+      await Notifications.requestPermissionsAsync();
+    })();
   }, []);
 
   useEffect(() => {
@@ -263,7 +252,8 @@ export default function Index() {
       endDate: sched.endDate,
       startNotificationId: sched.startNotificationId,
       deadlineNotificationId: sched.deadlineNotificationId,
-      reminderNotificationId: sched.reminderNotificationId,
+      reminderNotificationId: undefined,
+      reminderNotificationIds: sched.reminderNotificationIds,
       startedAt: null,
       completedAt: null,
       spawnedNext: false,

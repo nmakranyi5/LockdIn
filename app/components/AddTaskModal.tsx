@@ -223,8 +223,12 @@ export default function AddTaskModal({
     checkFirstLaunch();
   }, []);
 
+  // Past start times are only off limits for new tasks and reschedules;
+  // editing a task that already started must not move its start to "now".
+  const clampStart = !initialTask || !!initialTask.completedAt;
+
   useEffect(() => {
-    if (Platform.OS === "ios") return;
+    if (Platform.OS === "ios" || !clampStart) return;
 
     const nowDate = new Date();
     nowDate.setSeconds(0, 0);
@@ -300,6 +304,7 @@ export default function AddTaskModal({
   }, []);
 
   useEffect(() => {
+    if (!clampStart) return;
     const currentTime = new Date(now);
     currentTime.setSeconds(0, 0);
 
@@ -341,7 +346,9 @@ export default function AddTaskModal({
     const combinedStartDate = new Date(startDate);
     combinedStartDate.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
 
-    const finalStart = roundMinute(combinedStartDate);
+    const finalStart = clampStart
+      ? roundMinute(combinedStartDate)
+      : combinedStartDate;
 
     const combinedEndDate = new Date(endDate);
     combinedEndDate.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);

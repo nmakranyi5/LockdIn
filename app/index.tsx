@@ -16,6 +16,10 @@ import AuthScreen from "../components/auth/AuthScreen";
 import { useAuth } from "../components/auth/AuthProvider";
 import CheckInModal from "../components/CheckInModal";
 import DayStrip from "../components/DayStrip";
+import { setNudgesEnabled } from "../components/friends/api";
+import FriendsModal from "../components/friends/FriendsModal";
+import { useFriends, usePublishStreak } from "../components/friends/useFriends";
+import { usePush } from "../components/friends/usePush";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import { useSync } from "../components/sync/useSync";
@@ -96,6 +100,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [isHelpModalVisible, setIsHelpModalVisible] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
   const [isProfileVisible, setIsProfileVisible] = useState(false);
+  const [isFriendsVisible, setIsFriendsVisible] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
@@ -395,6 +400,17 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setHistory,
   });
 
+  const social = auth.configured && !!userId;
+  const friends = useFriends(social ? userId : null, todayKey);
+  usePublishStreak(
+    social ? userId : null,
+    sync.lastSyncedAt !== null,
+    todayKey,
+    { current: stats.current, longest: stats.longest, today: stats.today }
+  );
+  const push = usePush(social ? userId : null, () => setIsFriendsVisible(true));
+  const incomingRequests = friends.overview?.incoming.length ?? 0;
+
   const account: AccountInfo | undefined =
     auth.configured && userId
       ? {
@@ -406,14 +422,23 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           onSyncNow: () => {
             sync.syncNow();
           },
+          nudgesEnabled: friends.overview?.me.nudges_enabled ?? true,
+          onToggleNudges: async (enabled: boolean) => {
+            if (!userId) return;
+            await setNudgesEnabled(userId, enabled);
+            await friends.refresh();
+          },
           onSignOut: async () => {
-            // Push whatever we can, then forget this device's copy so the next
+            // Stop this phone getting the account's notifications, push
+            // whatever we can, then forget this device's copy so the next
             // person to sign in doesn't inherit it.
+            await push.unregister();
             await sync.syncNow();
             await sync.wipeLocal();
             await auth.signOut();
           },
           onDeleteAccount: async () => {
+            await push.unregister();
             const r = await auth.deleteAccount();
             if (r.error) return r.error;
             await sync.wipeLocal();
@@ -431,6 +456,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     isHelpModalVisible ||
     isSettingsModalVisible ||
     isProfileVisible ||
+    isFriendsVisible ||
     deleteId !== null ||
     endId !== null;
   // Only one prompt at a time, and never stacked on top of another dialog.
@@ -616,13 +642,32 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         )}
       </ScrollView>
 
-      {!isPast && (
+      {(!isPast || social) && (
         <View style={styles.addBar}>
-          <Button
-            label="Add task"
-            icon={<Ionicons name="add" size={20} color="#fff" />}
-            onPress={openAdd}
-          />
+          {!isPast && (
+            <Button
+              label="Add task"
+              icon={<Ionicons name="add" size={20} color="#fff" />}
+              onPress={openAdd}
+              style={styles.addButton}
+            />
+          )}
+          {social && (
+            <View>
+              <IconButton
+                name="people"
+                label="Friends"
+                size={22}
+                background={colors.surface}
+                onPress={() => setIsFriendsVisible(true)}
+              />
+              {incomingRequests > 0 && (
+                <View style={styles.badge} pointerEvents="none">
+                  <Text style={styles.badgeText}>{incomingRequests > 9 ? "9+" : incomingRequests}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -713,6 +758,21 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         account={account}
         localOnly={!auth.configured}
       />
+
+      {social && (
+        <FriendsModal
+          visible={isFriendsVisible}
+          onClose={() => {
+            setIsFriendsVisible(false);
+            friends.refresh();
+          }}
+          overview={friends.overview}
+          loading={friends.loading}
+          error={friends.error}
+          onRefresh={friends.refresh}
+          me={{ avatar: profile.avatar, streak: stats.current, today: stats.today }}
+        />
+      )}
 
       <ProfileModal
         visible={isProfileVisible}
@@ -822,5 +882,27 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 20, fontWeight: "700", color: colors.textPrimary },
   emptySub: { fontSize: 15, color: colors.textMuted },
-  addBar: { paddingBottom: 8, paddingTop: 4 },
+  addBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingBottom: 8,
+    paddingTop: 4,
+  },
+  addButton: { flex: 1, minWidth: 0 },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.danger,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  badgeText: { fontSize: 11, fontWeight: "800", color: "#fff" },
 });

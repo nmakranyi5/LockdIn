@@ -173,10 +173,10 @@ function ProfileContent({
               </View>
               <View style={styles.xpMeta}>
                 <Text style={styles.xpMetaText}>
-                  {xp.xpIntoLevel} / {xp.xpForNext} XP
+                  {xp.xpIntoLevel.toLocaleString()} / {xp.xpForNext.toLocaleString()} XP
                 </Text>
                 <Text style={styles.xpMetaText}>
-                  {xp.toNext} to level {xp.level + 1}
+                  {xp.toNext.toLocaleString()} to level {xp.level + 1}
                 </Text>
               </View>
               <Text style={styles.bonus}>

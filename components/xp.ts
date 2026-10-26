@@ -148,6 +148,11 @@ export type XpSummary = {
   today: { xp: number; multiplier: number; streakBefore: number; counted: number };
   // XP breakdown for one day, computed from the tasks as they are now.
   forDay: (key: string) => { total: number; multiplier: number; perTask: Map<string, number> };
+  // A finished day's XP is frozen, so tasks finished on it no longer earn any.
+  isClosed: (key: string) => boolean;
+  // Extra XP you would get by finishing this task now (0 if its day is closed,
+  // or the day's cap is already full of better tasks).
+  gainIfCompleted: (task: Task) => number;
 };
 
 export function computeXp(
@@ -172,6 +177,21 @@ export function computeXp(
   // Days whose tasks have since been deleted still count.
   for (const [k, xp] of Object.entries(ledger)) if (!byDay[k]) total += xp;
 
+  const isClosed = (key: string) => key < todayKey && ledger[key] !== undefined;
+
+  const gainIfCompleted = (task: Task) => {
+    const key = dayKey(new Date(task.startDate));
+    if (task.completedAt || isClosed(key)) return 0;
+    const list = byDay[key] ?? [];
+    const sb = streakBefore(days, key);
+    const before = dayXp(list, sb).total;
+    const after = dayXp(
+      list.map((t) => (t.id === task.id ? { ...t, completedAt: Date.now() } : t)),
+      sb
+    ).total;
+    return after - before;
+  };
+
   const today = forDay(todayKey);
   const lvl = levelFromXp(total);
   return {
@@ -184,5 +204,7 @@ export function computeXp(
       counted: today.perTask.size,
     },
     forDay,
+    isClosed,
+    gainIfCompleted,
   };
 }

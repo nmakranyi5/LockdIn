@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "../assets/colors/colors";
 import Button from "./ui/Button";
@@ -15,6 +15,8 @@ const SEEN_KEY = "@lockdin_level_seen";
 export function useLevelUp(level: number, userId: string | null, enabled: boolean) {
   const [celebrate, setCelebrate] = useState<number | null>(null);
   const [current, setCurrent] = useState(level);
+  // Levels the completion screen has already celebrated.
+  const claimed = useRef(0);
   useEffect(() => setCurrent(level), [level]);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function useLevelUp(level: number, userId: string | null, enabled: boolea
         // First run for this account (or progress went down): start quietly.
         remember();
         setCelebrate(null);
-      } else if (level > seen.level) {
+      } else if (level > seen.level && level > claimed.current) {
         setCelebrate(level);
       }
     })();
@@ -47,7 +49,18 @@ export function useLevelUp(level: number, userId: string | null, enabled: boolea
     setCelebrate(null);
   }, [userId, current]);
 
-  return { celebrate, dismiss };
+  // The completion screen shows level-ups itself; record the level as seen so
+  // this dialog doesn't repeat it afterwards.
+  const markSeen = useCallback(
+    (lvl: number) => {
+      claimed.current = Math.max(claimed.current, lvl);
+      AsyncStorage.setItem(SEEN_KEY, JSON.stringify({ userId, level: lvl })).catch(() => {});
+      setCelebrate(null);
+    },
+    [userId]
+  );
+
+  return { celebrate, dismiss, markSeen };
 }
 
 type LevelUpModalProps = {

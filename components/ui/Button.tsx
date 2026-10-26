@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { colors, radius } from "../../assets/colors/colors";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "success" | "ghost";
 
 type ButtonProps = {
   label: string;
@@ -38,6 +38,7 @@ export default function Button({
           variant === "secondary" || variant === "ghost"
             ? styles.labelMuted
             : null,
+          variant === "success" ? styles.labelOnLight : null,
         ]}
       >
         {label}
@@ -56,6 +57,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     borderRadius: radius.md,
   },
+  labelOnLight: { color: "#052e1c" },
   label: {
     color: "#fff",
     fontSize: 16,
@@ -73,5 +75,6 @@ const variantStyles = StyleSheet.create({
     borderColor: colors.border,
   },
   danger: { backgroundColor: colors.danger },
+  success: { backgroundColor: colors.success },
   ghost: { backgroundColor: "transparent" },
 });

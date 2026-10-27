@@ -34,7 +34,6 @@ import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
   scheduleCheckInNotifications,
-  scheduleDeadlineNotification,
   scheduleTaskNotifications,
 } from "../components/scheduleTask";
 import TaskCard from "../components/TaskCard";
@@ -193,6 +192,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   };
 
   const onEdit = (id: string) => {
+    // A finished task is part of the record: it can't be opened or changed.
+    if (findTask(id)?.completedAt) return;
     setEditingId(id);
     setIsModalVisible(true);
   };
@@ -249,7 +250,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const toggleItem = (id: string, itemId: string) => {
     const task = findTask(id);
-    if (!task) return;
+    if (!task || task.completedAt) return;
     const completesList =
       !task.completedAt &&
       (task.items ?? []).every((i) => (i.id === itemId ? !i.done : i.done)) &&
@@ -265,13 +266,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     if (items.length > 0 && items.every((i) => i.done)) {
       completeTask(id, { items });
     } else {
-      // Unticking an item reopens a completed checklist.
-      updateTask(id, { items, ...(task.completedAt ? { completedAt: null } : {}) });
-      if (task.completedAt) {
-        scheduleDeadlineNotification(task).then((deadlineNotificationId) =>
-          updateTask(id, { deadlineNotificationId })
-        );
-      }
+      updateTask(id, { items });
     }
   };
 

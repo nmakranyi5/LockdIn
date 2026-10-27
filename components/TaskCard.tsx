@@ -55,6 +55,7 @@ export default function TaskCard({
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
+      disabled={completed}
       style={[styles.card, s.isDone && styles.cardDone]}
     >
       {showAccent && (
@@ -120,6 +121,7 @@ export default function TaskCard({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.7}
+              disabled={completed}
               style={styles.itemRow}
               onPress={() => onToggleItem(item.id)}
             >

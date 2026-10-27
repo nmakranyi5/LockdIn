@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these eight files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these nine files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -25,8 +25,11 @@ In the Supabase dashboard open **SQL Editor → New query** and run these eight 
 8. [`migrations/20260101000700_avatars.sql`](migrations/20260101000700_avatars.sql): lets a profile picture be
    stored as the avatar. Skipping it is harmless: a picture stays on the device that chose it (everything else
    keeps syncing) and uploads once this is run.
+9. [`migrations/20260101000800_friend_today.sql`](migrations/20260101000800_friend_today.sql): fixes friends'
+   "done today" going stale (a friend who finished yesterday no longer shows as done today until they report
+   today), and the shared streak counting it twice. Safe to run more than once.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all eight.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all nine.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.

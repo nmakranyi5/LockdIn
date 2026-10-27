@@ -17,9 +17,9 @@ await db.exec(`
   create schema net;
   create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000) returns bigint language sql as $$ select 1::bigint $$;
 `);
-for (const f of ['20260101000000_init.sql', '20260101000100_grants.sql', '20260101000200_friends.sql', '20260101000300_signup_username.sql', '20260101000400_xp.sql', '20260101000500_goals.sql', '20260101000600_water.sql', '20260101000700_avatars.sql'])
+for (const f of ['20260101000000_init.sql', '20260101000100_grants.sql', '20260101000200_friends.sql', '20260101000300_signup_username.sql', '20260101000400_xp.sql', '20260101000500_goals.sql', '20260101000600_water.sql', '20260101000700_avatars.sql', '20260101000800_friend_today.sql'])
   await db.exec(sql(f).replace('create extension if not exists pg_net;', ''));
-console.log('ok   all eight migrations apply cleanly');
+console.log('ok   all nine migrations apply cleanly');
 
 const as = async (uid, fn) => {
   await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub', '${uid}', false);`);

@@ -162,11 +162,7 @@ function ProfileContent({
                   style={styles.name}
                 />
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.avatarRow}
-              >
+              <View style={styles.avatarRow}>
                 <TouchableOpacity
                   activeOpacity={0.8}
                   accessibilityRole="button"
@@ -195,7 +191,7 @@ function ProfileContent({
                     <Text style={styles.avatarChoiceText}>{a}</Text>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
+              </View>
               {photoError && <Text style={styles.photoError}>{photoError}</Text>}
             </View>
 
@@ -433,7 +429,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
-  avatarRow: { gap: 8, paddingRight: 4 },
+  // Wraps instead of scrolling, so every choice is always fully visible.
+  avatarRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   avatarChoice: {
     width: 44,
     height: 44,

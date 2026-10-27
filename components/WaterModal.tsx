@@ -82,7 +82,7 @@ export default function WaterModal({ visible, goal, log, todayKey, onChangeGoal,
           );
         })}
       </View>
-      <Text style={styles.note}>Green days reached the target. Your water doesn't affect streaks or XP.</Text>
+      <Text style={styles.note}>Green days reached the target. Water has no effect on streaks or XP.</Text>
     </ModalCard>
   );
 }

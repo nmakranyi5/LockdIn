@@ -85,6 +85,10 @@ type Options = {
   setWater: Dispatch<SetStateAction<WaterLog>>;
 };
 
+// Days whose water count changed since the server last got it.
+const unsyncedWater = (m: Meta, w: WaterLog) =>
+  Object.keys(w).filter((d) => m.waterSynced[d] !== w[d].at);
+
 // An account that never chose a goal doesn't overrule the ones on this device.
 const withGoal = (remote: Profile, local: Profile): Profile => ({
   ...remote,
@@ -147,12 +151,6 @@ export function useSync(o: Options) {
   const persist = () =>
     AsyncStorage.setItem(META_KEY, JSON.stringify(metaRef.current)).catch(() => {});
 
-  // Days whose water count changed since the server last got it.
-  const unsyncedWater = () =>
-    Object.keys(waterRef.current).filter(
-      (d) => metaRef.current.waterSynced[d] !== waterRef.current[d].at
-    );
-
   const countPending = () => {
     const m = metaRef.current;
     const unsyncedDays = Object.keys(historyRef.current).filter(
@@ -167,7 +165,7 @@ export function useSync(o: Options) {
         (m.profileDirty ? 1 : 0) +
         unsyncedDays +
         unsyncedXp +
-        unsyncedWater().length
+        unsyncedWater(m, waterRef.current).length
     );
   };
 
@@ -472,7 +470,7 @@ export function useSync(o: Options) {
 
   useEffect(() => {
     if (!accountReady) return;
-    if (unsyncedWater().length) {
+    if (unsyncedWater(metaRef.current, water).length) {
       countPending();
       scheduleSync();
     }

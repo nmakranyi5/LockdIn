@@ -26,7 +26,7 @@ import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import { dayKey } from "../components/streak";
-import { goalBonus, pendingGoal } from "../components/goals";
+import { pendingGoal } from "../components/goals";
 import { BASE_XP, DAILY_TASK_CAP, levelFromXp, XpSummary } from "../components/xp";
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
@@ -496,10 +496,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const finishKind = finishTask ? kindOf(finishTask) : null;
   const finishesEarly = !!finishTask && finishKind === "timer" && isEarlyFinish(finishTask, now);
   const finishXp = finishTask ? xp.gainIfCompleted(finishTask) : 0;
-  const finishReachesGoal = !!finishTask && xp.wouldReachGoal(finishTask);
-  const finishGoalBonus = finishTask
-    ? goalBonus(goalFor(dayKey(new Date(finishTask.startDate))))
-    : 1;
+  const finishGoal = finishTask ? xp.goalOutcome(finishTask) : { reaches: false, bonus: 1 };
+  const finishReachesGoal = finishGoal.reaches;
+  const finishGoalBonus = finishGoal.bonus;
 
   const anyModalOpen =
     isModalVisible ||
@@ -572,9 +571,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       after,
       streakMultiplier: day.streakMultiplier,
       goalBonus: day.goalBonus,
-      // Reaching the goal is a moment of its own; with "all tasks" it is
-      // simply finishing the last task of the day.
-      goalReached: day.goalMet && !pending.before.forDay(key).goalMet,
+      // Reaching a numbered goal is a moment of its own; with "all tasks" it
+      // is simply finishing the last task of the day (`dayDone`).
+      goalReached: todayGoal !== 0 && day.goalMet && !pending.before.forDay(key).goalMet,
       dayDone:
         todayGoal === 0 &&
         stats.today === "complete" &&

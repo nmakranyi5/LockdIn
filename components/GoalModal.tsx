@@ -16,7 +16,7 @@ type GoalModalProps = {
   onClose: () => void;
 };
 
-const OPTIONS = [ALL_TASKS, ...Array.from({ length: MAX_GOAL }, (_, i) => i + 1)].map((g) => ({
+const OPTIONS = [...Array.from({ length: MAX_GOAL }, (_, i) => i + 1), ALL_TASKS].map((g) => ({
   value: String(g),
   label: g === ALL_TASKS ? "All tasks" : goalShort(g),
 }));
@@ -72,8 +72,8 @@ export default function GoalModal({ visible, current, pending, onSave, onClose }
           </View>
         ) : (
           <Text style={styles.muted}>
-            Every task you schedule must be done. Pick a number for a bonus: the higher the goal,
-            the more XP each task earns on days you reach it.
+            Every task you schedule that day must be done. The bonus grows with the number of tasks
+            that day: ×1.10 for each extra task, up to 10. Finish all 5 and every task earns ×1.40.
           </Text>
         )}
       </View>

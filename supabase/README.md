@@ -141,9 +141,15 @@ haven't been frozen yet; already-finished days keep the XP they earned.
 
 ## Daily goal
 
-People choose how many tasks a day must include to count for their streak: "All my tasks" (the default)
-or "At least N tasks in a day" (1 to 10). Reaching the goal gives a bonus on top of the streak
-multiplier: every task completed that day earns `1 + 0.1 × (N − 1)` times its XP (so ×1.2 for 3 tasks), applied
-only on days the goal is reached. A change starts tomorrow, so today can't be gamed; past days keep the goal
-they were played with (`day_history.goal`). The schedule of changes lives in `profiles.goal_schedule`.
-The app only sends goal data when it isn't the default, so it keeps working before the migration is run.
+People choose how many tasks a day must include to count for their streak: "At least N tasks in a day"
+(1 to 10, and **1 is the default**) or "All my tasks", listed last. Reaching the goal gives a bonus on top of
+the streak multiplier: every task completed that day earns `1 + 0.1 × (N − 1)` times its XP (so ×1.2 for 3
+tasks), applied only on days the goal is reached. "All my tasks" scales with the day: finishing all of a day's
+n tasks (n up to 10) earns the bonus of a goal of n. A change starts tomorrow, so today can't be gamed;
+past days keep the goal they were played with (`day_history.goal`, 0 meaning "all tasks"). The schedule of
+changes lives in `profiles.goal_schedule`.
+
+The column's default in the database is still the original "all tasks" rule: that is what "never chose a
+goal" means to the server. The app moves everyone who never touched the setting to the new default from
+tomorrow, and sends the goal up whenever it differs from the server's default. Before the goals migration is
+run the app keeps syncing and simply leaves the goal data out.

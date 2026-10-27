@@ -77,6 +77,10 @@ type Options = {
   setXpLedger: Dispatch<SetStateAction<XpLedger>>;
 };
 
+// An account that never chose a goal doesn't overrule the one on this device.
+const withGoal = (remote: Profile, local: Profile): Profile =>
+  isDefaultSchedule(remote.goalSchedule) ? { ...remote, goalSchedule: local.goalSchedule } : remote;
+
 const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar, p.goalSchedule]);
 
 // Offline-first sync between local state and Supabase. Local storage stays the
@@ -239,8 +243,12 @@ export function useSync(o: Options) {
     };
     if (!m.profilePulled) {
       const remote = await pullProfile(client, uid);
-      if (remote && (remote.name.trim() || !isDefaultSchedule(remote.goalSchedule))) adopt(remote);
-      else if (local.name || local.avatar !== AVATARS[0] || !isDefaultSchedule(local.goalSchedule))
+      if (remote && (remote.name.trim() || !isDefaultSchedule(remote.goalSchedule))) {
+        adopt(withGoal(remote, local));
+        // The account has no goal of its own yet: ours still has to go up.
+        if (isDefaultSchedule(remote.goalSchedule) && !isDefaultSchedule(local.goalSchedule))
+          m.profileDirty = true;
+      } else if (local.name || local.avatar !== AVATARS[0] || !isDefaultSchedule(local.goalSchedule))
         m.profileDirty = true;
       m.profilePulled = true;
     }
@@ -250,7 +258,8 @@ export function useSync(o: Options) {
       if (m.profileSig === sent) m.profileDirty = false;
     } else {
       const remote = await pullProfile(client, uid);
-      if (remote && profileSig(remote) !== profileSig(profileRef.current)) adopt(remote);
+      const merged = remote && withGoal(remote, profileRef.current);
+      if (merged && profileSig(merged) !== profileSig(profileRef.current)) adopt(merged);
     }
     persist();
 

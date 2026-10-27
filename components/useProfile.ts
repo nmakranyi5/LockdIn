@@ -12,6 +12,8 @@ import {
   GoalSchedule,
   normalizeSchedule,
   setGoal as scheduleSetGoal,
+  migrateLegacySchedule,
+  SERVER_DEFAULT_SCHEDULE,
 } from "./goals";
 import { computeXp, finalizeXp, XpLedger } from "./xp";
 import { Task } from "./taskState";
@@ -50,7 +52,11 @@ export function useProfile(tasks: Task[], tasksLoaded: boolean, now: number) {
           setProfile({
             ...DEFAULT_PROFILE,
             ...saved,
-            goalSchedule: normalizeSchedule(saved.goalSchedule),
+            // A profile saved before goals existed was on "all my tasks".
+            goalSchedule: migrateLegacySchedule(
+              normalizeSchedule(saved.goalSchedule ?? SERVER_DEFAULT_SCHEDULE),
+              dayKey(new Date())
+            ),
           });
         }
         if (h) setHistory(JSON.parse(h));

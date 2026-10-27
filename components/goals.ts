@@ -12,13 +12,35 @@ export type GoalSchedule = GoalEntry[];
 export const MAX_GOAL = 10;
 export const ALL_TASKS = 0;
 
-export const DEFAULT_GOAL_SCHEDULE: GoalSchedule = [{ from: "0000-01-01", goal: ALL_TASKS }];
+// New accounts start on "at least 1 task a day".
+export const DEFAULT_GOAL = 1;
+export const DEFAULT_GOAL_SCHEDULE: GoalSchedule = [{ from: "0000-01-01", goal: DEFAULT_GOAL }];
+
+// What the server stores for a profile that never chose a goal: the original
+// "all my tasks" rule. Anything else has to be sent to the server.
+export const SERVER_DEFAULT_SCHEDULE: GoalSchedule = [{ from: "0000-01-01", goal: ALL_TASKS }];
+
+export const isServerDefaultSchedule = (s: GoalSchedule) =>
+  JSON.stringify(s) === JSON.stringify(SERVER_DEFAULT_SCHEDULE);
+
+// Before the default changed everyone was on "all my tasks" without choosing it.
+// Someone who never touched the setting moves to the new default from tomorrow
+// (past days keep the rule they were played with).
+export function migrateLegacySchedule(s: GoalSchedule, todayKey: string): GoalSchedule {
+  return isServerDefaultSchedule(s)
+    ? [...s, { from: tomorrowKey(todayKey), goal: DEFAULT_GOAL }]
+    : s;
+}
 
 // Each extra task in the goal adds 10% XP to every task on days it is reached.
 export const GOAL_BONUS_PER_TASK = 0.1;
 
 export const goalBonus = (goal: number) =>
   goal > 0 ? 1 + GOAL_BONUS_PER_TASK * (Math.min(goal, MAX_GOAL) - 1) : 1;
+
+// "All my tasks" scales with the day: finishing everything on a day with n
+// tasks earns the bonus of a goal of n (up to MAX_GOAL).
+export const allTasksBonus = (tasksThatDay: number) => goalBonus(Math.min(tasksThatDay, MAX_GOAL));
 
 export const goalLabel = (goal: number) =>
   goal === ALL_TASKS ? "All my tasks" : `At least ${goal} task${goal === 1 ? "" : "s"} in a day`;

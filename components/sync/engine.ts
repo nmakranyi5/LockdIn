@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { History } from "../streak";
 import { Task } from "../taskState";
 import { XpLedger } from "../xp";
-import { DEFAULT_GOAL_SCHEDULE, GoalSchedule, normalizeSchedule } from "../goals";
+import { GoalSchedule, isServerDefaultSchedule, normalizeSchedule, SERVER_DEFAULT_SCHEDULE } from "../goals";
 import {
   HistoryRow,
   mergeLocalOnly,
@@ -123,12 +123,18 @@ export function applyRemote(
 export async function pushHistory(client: SupabaseClient, userId: string, rows: HistoryRow[]) {
   for (const part of chunks(rows, CHUNK)) {
     // A finished day is write-once: the first device to report it wins.
-    const { error } = await client
-      .from("day_history")
-      .upsert(
-        part.map((r) => ({ ...r, user_id: userId })),
-        { onConflict: "user_id,day", ignoreDuplicates: true }
-      );
+    const send = (rows: HistoryRow[]) =>
+      client
+        .from("day_history")
+        .upsert(
+          rows.map((r) => ({ ...r, user_id: userId })),
+          { onConflict: "user_id,day", ignoreDuplicates: true }
+        );
+    let { error } = await send(part);
+    if (isMissingGoalColumn(error)) {
+      // Before the goals SQL has been run: send the days without their goal.
+      ({ error } = await send(part.map(({ goal: _goal, ...rest }) => rest as HistoryRow)));
+    }
     check(error);
   }
 }
@@ -154,8 +160,13 @@ export async function pullHistory(client: SupabaseClient, userId: string): Promi
 
 export type RemoteProfile = { name: string; avatar: string; goalSchedule: GoalSchedule };
 
-export const isDefaultSchedule = (s: GoalSchedule) =>
-  JSON.stringify(s) === JSON.stringify(DEFAULT_GOAL_SCHEDULE);
+// Has this profile chosen anything the server doesn't already assume
+// ("all my tasks")? Only then does the goal need to be sent or adopted.
+export const isDefaultSchedule = isServerDefaultSchedule;
+
+// Before the goals SQL has been run the column doesn't exist.
+const isMissingGoalColumn = (error: { code?: string; message?: string } | null) =>
+  !!error && (error.code === "PGRST204" || error.code === "42703" || /goal/.test(error.message ?? ""));
 
 export async function pullProfile(client: SupabaseClient, userId: string) {
   const { data, error } = await client
@@ -170,7 +181,8 @@ export async function pullProfile(client: SupabaseClient, userId: string) {
   return {
     name: row.name,
     avatar: row.avatar,
-    goalSchedule: normalizeSchedule(row.goal_schedule),
+    // A missing column or value means nothing has been chosen.
+    goalSchedule: row.goal_schedule === undefined ? SERVER_DEFAULT_SCHEDULE : normalizeSchedule(row.goal_schedule),
   } as RemoteProfile;
 }
 
@@ -179,7 +191,11 @@ export async function pushProfile(client: SupabaseClient, userId: string, p: Rem
   // Only sent once a goal has been chosen, so everyone else keeps syncing
   // without needing the goals SQL.
   if (!isDefaultSchedule(p.goalSchedule)) row.goal_schedule = p.goalSchedule;
-  const { error } = await client.from("profiles").upsert(row, { onConflict: "id" });
+  let { error } = await client.from("profiles").upsert(row, { onConflict: "id" });
+  if (row.goal_schedule && isMissingGoalColumn(error)) {
+    delete row.goal_schedule;
+    ({ error } = await client.from("profiles").upsert(row, { onConflict: "id" }));
+  }
   check(error);
 }
 // Each finished day's XP is write-once, first device to report wins.

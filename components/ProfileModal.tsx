@@ -18,7 +18,7 @@ import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
 import GoalModal from "./GoalModal";
-import { goalBonus, goalLabel } from "./goals";
+import { allTasksBonus, goalBonus, goalLabel } from "./goals";
 import IconButton from "./ui/IconButton";
 import { MAX_STREAK_BONUS_DAYS, STREAK_BONUS_PER_DAY, XpSummary } from "./xp";
 import { AVATARS, Profile } from "./useProfile";
@@ -218,7 +218,9 @@ function ProfileContent({
               ) : (
                 <Text style={styles.bonus}>
                   Today: {goal.doneToday} of {goal.totalToday} task{goal.totalToday === 1 ? "" : "s"} done.
-                  Set a number for an XP bonus.
+                  {goal.totalToday > 1
+                    ? ` Finish them all for ×${allTasksBonus(goal.totalToday).toFixed(2)} XP.`
+                    : ""}
                 </Text>
               )}
               {goal.pending !== null && goal.pending !== goal.current && (

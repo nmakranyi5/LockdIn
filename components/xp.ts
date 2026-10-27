@@ -1,4 +1,4 @@
-import { goalBonus } from "./goals";
+import { allTasksBonus, goalBonus } from "./goals";
 import { GoalLookup, History, dayKey, fromKey, isDayComplete, summarize } from "./streak";
 import { addDays, Priority, priorityOf, Task } from "./taskState";
 
@@ -58,12 +58,14 @@ function counted(tasksOfDay: Task[]) {
 }
 
 // `goal` is the day's goal (0 = all tasks). Reaching it adds a bonus to every
-// task finished that day; missing it earns the normal amount.
+// task finished that day; missing it earns the normal amount. With "all tasks"
+// the bonus grows with the number of tasks that day.
 export function dayXp(tasksOfDay: Task[], streak: number, goal = 0) {
   const finished = tasksOfDay.filter((t) => !!t.completedAt).length;
-  const goalMet = goal > 0 && finished >= goal;
+  const goalMet =
+    goal > 0 ? finished >= goal : tasksOfDay.length > 0 && finished === tasksOfDay.length;
   const streakMult = streakMultiplier(streak);
-  const goalMult = goalMet ? goalBonus(goal) : 1;
+  const goalMult = !goalMet ? 1 : goal > 0 ? goalBonus(goal) : allTasksBonus(tasksOfDay.length);
   const multiplier = streakMult * goalMult;
   const perTask = new Map<string, number>();
   let total = 0;
@@ -178,7 +180,8 @@ export type XpSummary = {
   // when this is the task that reaches the goal.
   gainIfCompleted: (task: Task) => number;
   // Finishing this task would be the one that reaches the day's goal.
-  wouldReachGoal: (task: Task) => boolean;
+  // Finishing this task would reach the day's goal; `bonus` is what the goal then pays.
+  goalOutcome: (task: Task) => { reaches: boolean; bonus: number };
 };
 
 export function computeXp(
@@ -222,12 +225,19 @@ export function computeXp(
     return after - before;
   };
 
-  const wouldReachGoal = (task: Task) => {
+  const goalOutcome = (task: Task) => {
     const key = dayKey(new Date(task.startDate));
+    if (task.completedAt || isClosed(key)) return { reaches: false, bonus: 1 };
+    const list = byDay[key] ?? [];
+    const sb = streakBefore(days, key);
     const goal = goalOf(key);
-    if (task.completedAt || goal <= 0 || isClosed(key)) return false;
-    const finished = (byDay[key] ?? []).filter((t) => !!t.completedAt).length;
-    return finished + 1 === goal;
+    const before = dayXp(list, sb, goal);
+    const after = dayXp(
+      list.map((t) => (t.id === task.id ? { ...t, completedAt: Date.now() } : t)),
+      sb,
+      goal
+    );
+    return { reaches: after.goalMet && !before.goalMet, bonus: after.goalBonus };
   };
 
   const today = forDay(todayKey);
@@ -247,6 +257,6 @@ export function computeXp(
     forDay,
     isClosed,
     gainIfCompleted,
-    wouldReachGoal,
+    goalOutcome,
   };
 }

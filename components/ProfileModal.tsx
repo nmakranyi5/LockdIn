@@ -17,6 +17,8 @@ import {
 import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
+import AvatarView from "./AvatarView";
+import { isImageAvatar, pickAvatarImage } from "./avatar";
 import GoalModal from "./GoalModal";
 import { allTasksBonus, goalBonus, goalLabel } from "./goals";
 import IconButton from "./ui/IconButton";
@@ -81,6 +83,21 @@ function ProfileContent({
 }: ProfileModalProps) {
   const insets = useSafeAreaInsets();
   const [goalOpen, setGoalOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const choosePhoto = async () => {
+    setPicking(true);
+    setPhotoError(null);
+    try {
+      const avatar = await pickAvatarImage();
+      if (avatar) onChange({ ...profile, avatar });
+    } catch (e) {
+      console.log("Could not pick a picture", e);
+      setPhotoError("Couldn't use that picture. Try another one, or allow photo access in Settings.");
+    } finally {
+      setPicking(false);
+    }
+  };
   // Calendar: WEEKS rows, Monday first, ending with the current week.
   const today = fromKey(todayKey);
   const mondayOffset = (today.getDay() + 6) % 7;
@@ -134,7 +151,7 @@ function ProfileContent({
             <View style={styles.identity}>
               <View style={styles.identityRow}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{profile.avatar}</Text>
+                  <AvatarView avatar={profile.avatar} size={60} fontSize={32} />
                 </View>
                 <TextInput
                   value={profile.name}
@@ -150,6 +167,24 @@ function ProfileContent({
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.avatarRow}
               >
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose a profile picture"
+                  onPress={choosePhoto}
+                  disabled={picking}
+                  style={[
+                    styles.avatarChoice,
+                    isImageAvatar(profile.avatar) && styles.avatarChoiceActive,
+                    picking && { opacity: 0.5 },
+                  ]}
+                >
+                  {isImageAvatar(profile.avatar) ? (
+                    <AvatarView avatar={profile.avatar} size={40} />
+                  ) : (
+                    <Ionicons name="image-outline" size={22} color={colors.accent} />
+                  )}
+                </TouchableOpacity>
                 {AVATARS.map((a) => (
                   <TouchableOpacity
                     key={a}
@@ -161,6 +196,7 @@ function ProfileContent({
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+              {photoError && <Text style={styles.photoError}>{photoError}</Text>}
             </View>
 
             <View style={styles.hero}>
@@ -386,8 +422,8 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  avatarText: { fontSize: 32 },
   name: {
     flex: 1,
     minWidth: 0,
@@ -407,9 +443,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: "hidden",
   },
   avatarChoiceActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   avatarChoiceText: { fontSize: 22 },
+  photoError: { fontSize: 13, color: colors.danger },
 
   hero: {
     alignItems: "center",

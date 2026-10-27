@@ -26,6 +26,9 @@ import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import CalendarModal from "../components/CalendarModal";
+import WaterCard from "../components/WaterCard";
+import WaterModal from "../components/WaterModal";
+import { glassesOn } from "../components/water";
 import { dayKey } from "../components/streak";
 import { pendingGoal } from "../components/goals";
 import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../components/xp";
@@ -114,6 +117,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [waterOpen, setWaterOpen] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // A task the person has said they finished, awaiting confirmation. `itemId`
@@ -430,6 +434,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     goalFor,
     changeGoal,
     todayKey,
+    water,
+    setWater,
+    addWater,
+    changeWaterGoal,
     loaded: profileLoaded,
   } = useProfile(tasks, loaded, now);
 
@@ -444,6 +452,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setHistory,
     xpLedger,
     setXpLedger,
+    water,
+    setWater,
   });
 
   const social = auth.configured && !!userId;
@@ -652,7 +662,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   // On short screens (landscape phones) the day header scrolls with the list
   // so the tasks get the room.
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   // Decided after mount so the static web pre-render (height 0) matches.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -675,10 +685,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           onPress={() => setCalendarOpen(true)}
         >
           <View style={styles.dayTitleRow}>
-            <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
+            {/* Same width as the icon, so the title itself stays centred. */}
+            <View style={styles.dayTitleIcon} />
+            <Text
+              style={[styles.dayTitle, { flexShrink: 1 }, windowWidth < 340 && { fontSize: 24 }]} numberOfLines={1} adjustsFontSizeToFit>
               {dayTitle()}
             </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+            <View style={styles.dayTitleIcon}>
+              <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+            </View>
           </View>
           <Text style={styles.daySub} numberOfLines={2}>
             {daySubtitle()}
@@ -760,6 +775,16 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
             </View>
           )}
 
+        {isSameDay(selectedDay, today) && (
+          <WaterCard
+            glasses={glassesOn(water, todayKey)}
+            goal={profile.waterGoal}
+            onAdd={() => addWater(1)}
+            onUndo={() => addWater(-1)}
+            onOpen={() => setWaterOpen(true)}
+          />
+        )}
+
         {dayTasks.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyCircle}>
@@ -822,6 +847,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           )}
         </View>
       )}
+
+      <WaterModal
+        visible={waterOpen}
+        goal={profile.waterGoal}
+        log={water}
+        todayKey={todayKey}
+        onChangeGoal={changeWaterGoal}
+        onClose={() => setWaterOpen(false)}
+      />
 
       <CalendarModal
         visible={calendarOpen}
@@ -1045,7 +1079,8 @@ const styles = StyleSheet.create({
   },
   // Takes whatever room the arrows leave, so a longer subtitle wraps instead of
   // pushing the buttons off-screen.
-  dayTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%" },
+  dayTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%" },
+  dayTitleIcon: { width: 20, alignItems: "center" },
   dayTitleWrap: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 8 },
   dayTitle: {
     fontSize: 34,

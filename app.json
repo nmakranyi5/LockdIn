@@ -44,7 +44,13 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LockdIn uses your photos so you can pick a profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

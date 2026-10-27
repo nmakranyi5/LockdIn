@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these six files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these nine files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -20,8 +20,16 @@ In the Supabase dashboard open **SQL Editor → New query** and run these six fi
 6. [`migrations/20260101000500_goals.sql`](migrations/20260101000500_goals.sql): the daily goal (see
    "Daily goal" below). Skipping it is harmless: goals still work on the device, they just don't sync
    between devices or count for friends' shared streaks.
+7. [`migrations/20260101000600_water.sql`](migrations/20260101000600_water.sql): the hydration tracker (see
+   "Hydration" below). Skipping it is harmless: water still works on the device, it just doesn't sync.
+8. [`migrations/20260101000700_avatars.sql`](migrations/20260101000700_avatars.sql): lets a profile picture be
+   stored as the avatar. Skipping it is harmless: a picture stays on the device that chose it (everything else
+   keeps syncing) and uploads once this is run.
+9. [`migrations/20260101000800_friend_today.sql`](migrations/20260101000800_friend_today.sql): fixes friends'
+   "done today" going stale (a friend who finished yesterday no longer shows as done today until they report
+   today), and the shared streak counting it twice. Safe to run more than once.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all six.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all nine.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.
@@ -153,3 +161,21 @@ The column's default in the database is still the original "all tasks" rule: tha
 goal" means to the server. The app moves everyone who never touched the setting to the new default from
 tomorrow, and sends the goal up whenever it differs from the server's default. Before the goals migration is
 run the app keeps syncing and simply leaves the goal data out.
+
+## Hydration
+
+A card on today's home screen counts glasses of water (+ and undo), with a daily target (8 by default, 1 to 30)
+and a last-7-days chart behind it. It is standalone: it never affects streaks or XP, and it is private to the
+owner like XP.
+
+`water_log` holds one row per day (`glasses`, `updated_at`). Unlike finished days these are edited all day,
+so rows are updated in place and the newest edit wins when two devices disagree (`updated_at` is the time of
+the edit on the device). The target is `profiles.water_goal`. As with goals, the app keeps syncing everything
+else before this migration is run and uploads the water days once the table exists.
+
+## Profile pictures
+
+Besides the emoji, a person can pick a photo (**Profile → the picture tile**). The app crops it to a centred
+square, shrinks it to 128 px and stores it in `profiles.avatar` as a small JPEG data URI (a few KB), so it syncs
+and shows up for friends without any file storage. The column only accepts an emoji (16 characters or fewer)
+or a `data:image/jpeg;base64,` string of at most 24000 characters.

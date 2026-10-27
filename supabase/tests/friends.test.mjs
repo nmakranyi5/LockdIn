@@ -29,6 +29,7 @@ await db.exec(sql('20260101000200_friends.sql').replace('create extension if not
 await db.exec(sql('20260101000300_signup_username.sql'));
 await db.exec(sql('20260101000400_xp.sql'));
 await db.exec(sql('20260101000500_goals.sql'));
+await db.exec(sql('20260101000800_friend_today.sql'));
 console.log('ok   all six migrations apply cleanly');
 
 let n = 0;
@@ -176,6 +177,14 @@ await as(B, () => db.exec(`update public.streak_stats set current_streak = 7`));
 ok('refreshing it brings it back (expiry is server-set)', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].streak === 7);
 await db.exec(`update public.streak_stats set today_day = current_date - 5 where user_id='${B}'`);
 ok('a status from days ago is shown as unknown, not as "done today"', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].today === 'unknown');
+await db.exec(`update public.streak_stats set today = 'complete', today_day = current_date - 1 where user_id='${B}'`);
+ok('"complete" reported for YESTERDAY is not shown as done today (friend has not opened the app yet)', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].today === 'unknown');
+await db.exec(`update public.streak_stats set today = 'complete', today_day = current_date + 1 where user_id='${B}'`);
+ok('a friend whose calendar is already a day ahead keeps their status', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].today === 'complete');
+await db.exec(`update public.streak_stats set today = 'pending', today_day = current_date where user_id='${B}'`);
+ok('today\'s own status is shown as before', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].today === 'pending');
+await db.exec(`update public.streak_stats set today = 'complete', today_day = current_date where user_id='${B}'`);
+ok('...including done', (await rpc(A, `public.friends_overview(current_date)`)).friends[0].today === 'complete');
 await db.exec(`update public.streak_stats set today_day = current_date where user_id='${B}'`);
 
 // ---------------------------------------------------------------- shared streak
@@ -189,6 +198,10 @@ await db.exec(`update public.streak_stats set today='complete', today_day=curren
 ok('today counts once both are done = 5', (await shared()) === 5);
 await db.exec(`update public.streak_stats set today='pending' where user_id='${B}'`);
 ok('...but not while only one of you is done', (await shared()) === 4);
+await db.exec(`update public.streak_stats set today='complete', today_day=current_date - 1 where user_id in ('${A}','${B}')`);
+ok('a "complete" reported for yesterday is not counted again as today (no double count)', (await shared()) === 4);
+await db.exec(`update public.streak_stats set today='complete', today_day=current_date where user_id='${A}'`);
+await db.exec(`update public.streak_stats set today='pending', today_day=current_date where user_id='${B}'`);
 await db.exec(`update public.day_history set done = 1 where user_id='${B}' and day = current_date - 3`);
 ok('one person missing a day ends it (counts back to that day)', (await shared()) === 2);
 await db.exec(`update public.day_history set done = 2 where user_id='${B}' and day = current_date - 3`);
@@ -217,6 +230,11 @@ await db.exec(`update public.nudges set created_at = now() - interval '21 hours'
 ok('after 20 hours you can nudge again', (await rpc(A, `public.send_nudge('${B}')`)) === 'sent');
 await db.exec(`update public.streak_stats set today='complete', today_day=current_date where user_id='${B}'`); await db.exec(`update public.nudges set created_at = now() - interval '30 hours'`); await clearPushes();
 ok('no nudging someone who already finished today', (await rpc(A, `public.send_nudge('${B}')`)) === 'already_done' && (await pushes()).length === 0);
+// a "complete" from yesterday that was reported long ago is stale: they have not finished today
+await db.exec(`alter table public.streak_stats disable trigger streak_stats_touch; update public.streak_stats set today_day = current_date - 1, updated_at = now() - interval '10 hours' where user_id='${B}'; alter table public.streak_stats enable trigger streak_stats_touch;`);
+ok('a stale "complete" from yesterday does not block a nudge', (await rpc(A, `public.send_nudge('${B}')`)) === 'sent');
+await db.exec(`update public.nudges set created_at = now() - interval '30 hours'`); await clearPushes();
+await db.exec(`update public.streak_stats set today = 'complete', today_day = current_date where user_id='${B}'`);
 await db.exec(`update public.streak_stats set today='pending' where user_id='${B}'`);
 await as(B, () => db.exec(`update public.profiles set nudges_enabled = false where id='${B}'`)); await db.exec(`update public.nudges set created_at = now() - interval '30 hours'`); await clearPushes();
 ok('if they turned nudges off: recorded, sender told "sent", nothing delivered', (await rpc(A, `public.send_nudge('${B}')`)) === 'sent' && (await pushes()).length === 0);

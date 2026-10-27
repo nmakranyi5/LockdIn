@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors, radius } from "../assets/colors/colors";
+import AvatarView from "./AvatarView";
 
 type ProfileBubbleProps = {
   avatar: string;
@@ -27,7 +28,7 @@ export default function ProfileBubble({
       style={[styles.bubble, lit && styles.bubbleLit]}
     >
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{avatar}</Text>
+        <AvatarView avatar={avatar} size={32} fontSize={18} />
       </View>
       <View style={styles.streak}>
         <Ionicons
@@ -71,8 +72,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.card,
+    overflow: "hidden",
   },
-  avatarText: { fontSize: 18 },
   streak: { flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 3 },
   count: {
     flexShrink: 1,

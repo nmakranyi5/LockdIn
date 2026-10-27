@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { History } from "../streak";
 import { Task } from "../taskState";
 import { XpLedger } from "../xp";
+import { DEFAULT_GOAL_SCHEDULE, GoalSchedule, normalizeSchedule } from "../goals";
 import {
   HistoryRow,
   mergeLocalOnly,
@@ -137,36 +138,50 @@ export async function pullHistory(client: SupabaseClient, userId: string): Promi
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await client
       .from("day_history")
-      .select("day,total,done")
+      // "*" so this still works before the goals SQL has been run
+      .select("*")
       .eq("user_id", userId)
       .order("day", { ascending: true })
       .range(from, from + PAGE - 1);
     check(error);
-    for (const r of (data ?? []) as HistoryRow[]) out[r.day] = { total: r.total, done: r.done };
+    for (const r of (data ?? []) as HistoryRow[]) {
+      out[r.day] = { total: r.total, done: r.done, ...(r.goal ? { goal: r.goal } : {}) };
+    }
     if (!data || data.length < PAGE) break;
   }
   return out;
 }
 
-export type RemoteProfile = { name: string; avatar: string };
+export type RemoteProfile = { name: string; avatar: string; goalSchedule: GoalSchedule };
+
+export const isDefaultSchedule = (s: GoalSchedule) =>
+  JSON.stringify(s) === JSON.stringify(DEFAULT_GOAL_SCHEDULE);
 
 export async function pullProfile(client: SupabaseClient, userId: string) {
   const { data, error } = await client
     .from("profiles")
-    .select("name,avatar")
+    // "*" so this still works before the goals SQL has been run
+    .select("*")
     .eq("id", userId)
     .maybeSingle();
   check(error);
-  return (data as RemoteProfile | null) ?? null;
+  if (!data) return null;
+  const row = data as { name: string; avatar: string; goal_schedule?: unknown };
+  return {
+    name: row.name,
+    avatar: row.avatar,
+    goalSchedule: normalizeSchedule(row.goal_schedule),
+  } as RemoteProfile;
 }
 
 export async function pushProfile(client: SupabaseClient, userId: string, p: RemoteProfile) {
-  const { error } = await client
-    .from("profiles")
-    .upsert({ id: userId, name: p.name, avatar: p.avatar }, { onConflict: "id" });
+  const row: Record<string, unknown> = { id: userId, name: p.name, avatar: p.avatar };
+  // Only sent once a goal has been chosen, so everyone else keeps syncing
+  // without needing the goals SQL.
+  if (!isDefaultSchedule(p.goalSchedule)) row.goal_schedule = p.goalSchedule;
+  const { error } = await client.from("profiles").upsert(row, { onConflict: "id" });
   check(error);
 }
-
 // Each finished day's XP is write-once, first device to report wins.
 export async function pushXp(client: SupabaseClient, userId: string, ledger: XpLedger, days: string[]) {
   const rows = days.map((day) => ({ user_id: userId, day, xp: ledger[day] }));
@@ -193,3 +208,4 @@ export async function pullXp(client: SupabaseClient, userId: string): Promise<Xp
   }
   return out;
 }
+

@@ -14,6 +14,10 @@ export type CompletionData = {
   gained: number;
   basePoints: number;
   multiplier: number;
+  streakMultiplier: number;
+  // 1 unless the daily goal was reached; goalReached marks the task that did it.
+  goalBonus: number;
+  goalReached: boolean;
   // Why nothing was earned, when gained is 0.
   note?: string;
   before: LevelInfo;
@@ -184,13 +188,22 @@ function Content({ data }: { data: CompletionData }) {
         </View>
 
         {gained > 0 ? (
-          data.multiplier > 1 && (
-            <View style={styles.bonusPill}>
-              <Text style={styles.bonusText}>
-                {data.basePoints} XP × {data.multiplier.toFixed(2)} streak bonus
-              </Text>
-            </View>
-          )
+          <View style={styles.pills}>
+            {data.streakMultiplier > 1 && (
+              <View style={styles.bonusPill}>
+                <Text style={styles.bonusText}>
+                  {data.basePoints} XP × {data.streakMultiplier.toFixed(2)} streak bonus
+                </Text>
+              </View>
+            )}
+            {data.goalBonus > 1 && (
+              <View style={styles.goalPill}>
+                <Text style={styles.goalPillText}>
+                  🎯 × {data.goalBonus.toFixed(2)} daily goal bonus
+                </Text>
+              </View>
+            )}
+          </View>
         ) : (
           <Text style={styles.note}>{data.note ?? "No XP for this one."}</Text>
         )}
@@ -221,6 +234,12 @@ function Content({ data }: { data: CompletionData }) {
             </Text>
           </View>
         </View>
+
+        {data.goalReached && (
+          <Text style={styles.goalReached}>
+            🎯 Daily goal reached · {data.streak} day{data.streak === 1 ? "" : "s"} streak
+          </Text>
+        )}
 
         {data.dayDone && (
           <Text style={styles.dayDone}>
@@ -267,6 +286,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.streakSoft,
   },
+  pills: { alignItems: "center", gap: 6 },
+  goalPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentSoft,
+  },
+  goalPillText: { fontSize: 13, fontWeight: "700", color: colors.accent },
+  goalReached: { marginTop: 6, fontSize: 14, fontWeight: "700", color: colors.accent, textAlign: "center" },
   bonusText: { fontSize: 13, fontWeight: "700", color: colors.streak },
   note: { fontSize: 14, lineHeight: 20, textAlign: "center", color: colors.textMuted },
   levelBlock: {

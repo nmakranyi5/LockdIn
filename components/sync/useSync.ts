@@ -16,6 +16,7 @@ import { AVATARS, DEFAULT_PROFILE, Profile } from "../useProfile";
 import { supabase } from "./client";
 import {
   applyRemote,
+  isDefaultSchedule,
   pullHistory,
   pullProfile,
   pullXp,
@@ -76,7 +77,7 @@ type Options = {
   setXpLedger: Dispatch<SetStateAction<XpLedger>>;
 };
 
-const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar]);
+const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar, p.goalSchedule]);
 
 // Offline-first sync between local state and Supabase. Local storage stays the
 // source for the UI; this pushes local changes up and pulls remote ones down.
@@ -238,8 +239,9 @@ export function useSync(o: Options) {
     };
     if (!m.profilePulled) {
       const remote = await pullProfile(client, uid);
-      if (remote && remote.name.trim()) adopt(remote);
-      else if (local.name || local.avatar !== AVATARS[0]) m.profileDirty = true;
+      if (remote && (remote.name.trim() || !isDefaultSchedule(remote.goalSchedule))) adopt(remote);
+      else if (local.name || local.avatar !== AVATARS[0] || !isDefaultSchedule(local.goalSchedule))
+        m.profileDirty = true;
       m.profilePulled = true;
     }
     if (m.profileDirty) {

@@ -26,6 +26,7 @@ import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import { dayKey } from "../components/streak";
+import { goalBonus, pendingGoal } from "../components/goals";
 import { BASE_XP, DAILY_TASK_CAP, levelFromXp, XpSummary } from "../components/xp";
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
@@ -408,6 +409,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setXpLedger,
     stats,
     xp,
+    goalFor,
+    changeGoal,
     todayKey,
     loaded: profileLoaded,
   } = useProfile(tasks, loaded, now);
@@ -477,6 +480,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const finishKind = finishTask ? kindOf(finishTask) : null;
   const finishesEarly = !!finishTask && finishKind === "timer" && isEarlyFinish(finishTask, now);
   const finishXp = finishTask ? xp.gainIfCompleted(finishTask) : 0;
+  const finishReachesGoal = !!finishTask && xp.wouldReachGoal(finishTask);
+  const finishGoalBonus = finishTask
+    ? goalBonus(goalFor(dayKey(new Date(finishTask.startDate))))
+    : 1;
 
   const anyModalOpen =
     isModalVisible ||
@@ -495,7 +502,16 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     userId,
     profileLoaded && (!social || sync.lastSyncedAt !== null)
   );
+  const todayGoal = goalFor(todayKey);
+  const todayTasks = tasks.filter((t) => dayKey(new Date(t.startDate)) === todayKey);
+  const goalProgress = {
+    current: todayGoal,
+    pending: pendingGoal(profile.goalSchedule, todayKey)?.goal ?? null,
+    doneToday: todayTasks.filter((t) => !!t.completedAt).length,
+    totalToday: todayTasks.length,
+  };
   const selectedKey = dayKey(selectedDay);
+  const selectedGoal = goalFor(selectedKey);
   const dayXpInfo = xp.forDay(selectedKey);
   // A finished day's XP is frozen: show what it actually earned.
   const dayClosed = xp.isClosed(selectedKey);
@@ -538,7 +554,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       note,
       before,
       after,
-      dayDone: stats.today === "complete" && isSameDay(new Date(task.startDate), new Date()),
+      streakMultiplier: day.streakMultiplier,
+      goalBonus: day.goalBonus,
+      // Reaching the goal is a moment of its own; with "all tasks" it is
+      // simply finishing the last task of the day.
+      goalReached: day.goalMet && !pending.before.forDay(key).goalMet,
+      dayDone:
+        todayGoal === 0 &&
+        stats.today === "complete" &&
+        isSameDay(new Date(task.startDate), new Date()),
       streak: stats.current,
     });
     setPending(null);
@@ -589,7 +613,13 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     });
     if (dayTasks.length === 0) return date;
     const earned = dayEarned > 0 ? ` · +${dayEarned} XP` : "";
-    return `${date} · ${doneCount}/${dayTasks.length} done${earned}`;
+    const progress =
+      selectedGoal > 0
+        ? doneCount >= selectedGoal
+          ? "goal reached"
+          : `${doneCount}/${selectedGoal} toward goal`
+        : `${doneCount}/${dayTasks.length} done`;
+    return `${date} · ${progress}${earned}`;
   };
 
   const openAdd = () => {
@@ -687,7 +717,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
             <View style={styles.banner}>
               <Ionicons name="flame" size={22} color={colors.streak} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>All done for today</Text>
+                <Text style={styles.bannerTitle}>
+                  {todayGoal > 0 ? "Daily goal reached" : "All done for today"}
+                </Text>
                 <Text style={styles.bannerSub}>
                   {stats.current} day{stats.current === 1 ? "" : "s"} streak · +{xp.today.xp} XP
                   {xp.today.multiplier > 1 ? ` (×${xp.today.multiplier.toFixed(2)})` : ""}
@@ -829,6 +861,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         }
         cancelText={finishesEarly || finishKind !== "timer" ? "Not yet" : "Cancel"}
         xp={finishXp}
+        goalBonus={finishReachesGoal ? finishGoalBonus : undefined}
         onCancel={() => setFinishing(null)}
         onConfirm={() => {
           const f = finishing;
@@ -903,6 +936,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         stats={stats}
         xp={xp}
         todayKey={todayKey}
+        goal={goalProgress}
+        onChangeGoal={changeGoal}
       />
 
       </View>

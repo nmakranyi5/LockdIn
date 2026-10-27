@@ -12,6 +12,8 @@ type CompleteConfirmModalProps = {
   cancelText: string;
   // XP finishing this task would earn right now (hidden when 0).
   xp: number;
+  // Set when finishing this task reaches the day's goal (the bonus applies).
+  goalBonus?: number;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -24,6 +26,7 @@ export default function CompleteConfirmModal({
   confirmText,
   cancelText,
   xp,
+  goalBonus,
   onConfirm,
   onCancel,
 }: CompleteConfirmModalProps) {
@@ -46,6 +49,14 @@ export default function CompleteConfirmModal({
           <Text style={styles.rewardText}>You’ll earn +{xp} XP</Text>
         </View>
       )}
+      {goalBonus !== undefined && goalBonus > 1 && (
+        <View style={styles.goal} accessibilityLabel="This reaches your daily goal">
+          <Ionicons name="flag" size={16} color={colors.accent} />
+          <Text style={styles.goalText}>
+            This reaches your daily goal! ×{goalBonus.toFixed(2)} XP on all of today’s tasks
+          </Text>
+        </View>
+      )}
     </ModalCard>
   );
 }
@@ -64,6 +75,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warningSoft,
   },
   rewardText: { fontSize: 14, fontWeight: "700", color: colors.warning },
+  goal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentSoft,
+  },
+  goalText: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: "600", lineHeight: 18, color: colors.accent },
   actions: { flexDirection: "row", gap: 12 },
   action: { flex: 1 },
 });

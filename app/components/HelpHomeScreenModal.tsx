@@ -24,7 +24,7 @@ export default function HelpHomeScreenModal({
           "You can find this again under Settings → Help (top left).",
           "Hit the + button to create your first task and get started.",
           "Finish every task in a day to grow your 🔥 streak. Tap your avatar (top right) to see your profile.",
-          "Finish a task (you will be asked to confirm) to earn XP: more for important and urgent ones, boosted by your streak. Watch your level fill up on your profile.",
+          "Set a daily goal on your profile: at least 1 to 10 tasks in a day keeps your streak, and a higher goal earns bonus XP. Finish a task (you will be asked to confirm) to earn XP: more for important and urgent ones, boosted by your streak. Watch your level fill up on your profile.",
           "Tap the people button (bottom right) to add friends by username, compare streaks and nudge each other.",
         ]}
       />

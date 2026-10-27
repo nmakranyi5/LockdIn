@@ -1,7 +1,8 @@
 import { addDays, Task } from "./taskState";
 
 // A day's tasks are the ones that START on that day.
-export type DayRecord = { total: number; done: number };
+// `goal` is the day's goal (tasks to finish); 0/absent means all of the day's tasks.
+export type DayRecord = { total: number; done: number; goal?: number };
 export type History = Record<string, DayRecord>;
 
 export type DayStatus = "complete" | "missed" | "pending" | "empty" | "future";
@@ -16,16 +17,28 @@ export const fromKey = (k: string) => {
   return new Date(y, m - 1, d);
 };
 
-const isComplete = (r: DayRecord) => r.total > 0 && r.done === r.total;
+// A day counts when its goal is met: finishing at least `goal` tasks, or every
+// task if the goal is "all". Days without tasks don't count either way.
+export const isDayComplete = (r: DayRecord) =>
+  (r.goal ?? 0) > 0 ? r.done >= r.goal! : r.total > 0 && r.done === r.total;
+const isComplete = isDayComplete;
+
+export type GoalLookup = (day: string) => number;
 
 // Tasks grouped per day as they stand right now.
-export function summarize(tasks: Task[]): History {
+export function summarize(tasks: Task[], goalFor?: GoalLookup): History {
   const out: History = {};
   for (const t of tasks) {
     const k = dayKey(new Date(t.startDate));
     const rec = (out[k] ??= { total: 0, done: 0 });
     rec.total++;
     if (t.completedAt) rec.done++;
+  }
+  if (goalFor) {
+    for (const k of Object.keys(out)) {
+      const g = goalFor(k);
+      if (g > 0) out[k].goal = g;
+    }
   }
   return out;
 }
@@ -35,9 +48,10 @@ export function summarize(tasks: Task[]): History {
 export function finalizeHistory(
   tasks: Task[],
   history: History,
-  todayKey: string
+  todayKey: string,
+  goalFor?: GoalLookup
 ): History {
-  const live = summarize(tasks);
+  const live = summarize(tasks, goalFor);
   let next = history;
   for (const k of Object.keys(live)) {
     if (k < todayKey && !history[k]) {
@@ -65,9 +79,10 @@ export type StreakStats = {
 export function computeStats(
   tasks: Task[],
   history: History,
-  todayKey: string
+  todayKey: string,
+  goalFor?: GoalLookup
 ): StreakStats {
-  const days: History = { ...summarize(tasks), ...history };
+  const days: History = { ...summarize(tasks, goalFor), ...history };
   const keys = Object.keys(days).sort();
 
   const todayRec = days[todayKey];

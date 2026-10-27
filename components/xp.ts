@@ -1,4 +1,5 @@
-import { History, dayKey, fromKey, summarize } from "./streak";
+import { goalBonus } from "./goals";
+import { GoalLookup, History, dayKey, fromKey, isDayComplete, summarize } from "./streak";
 import { addDays, Priority, priorityOf, Task } from "./taskState";
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ export function streakBefore(days: History, day: string): number {
   for (let i = 0; i < 400 && dayKey(d) >= earliest; i++) {
     const r = days[dayKey(d)];
     if (r) {
-      if (r.total > 0 && r.done === r.total) n++;
+      if (isDayComplete(r)) n++;
       else break;
     }
     d = addDays(d, -1);
@@ -56,8 +57,14 @@ function counted(tasksOfDay: Task[]) {
     .slice(0, DAILY_TASK_CAP);
 }
 
-export function dayXp(tasksOfDay: Task[], streak: number) {
-  const multiplier = streakMultiplier(streak);
+// `goal` is the day's goal (0 = all tasks). Reaching it adds a bonus to every
+// task finished that day; missing it earns the normal amount.
+export function dayXp(tasksOfDay: Task[], streak: number, goal = 0) {
+  const finished = tasksOfDay.filter((t) => !!t.completedAt).length;
+  const goalMet = goal > 0 && finished >= goal;
+  const streakMult = streakMultiplier(streak);
+  const goalMult = goalMet ? goalBonus(goal) : 1;
+  const multiplier = streakMult * goalMult;
   const perTask = new Map<string, number>();
   let total = 0;
   for (const t of counted(tasksOfDay)) {
@@ -65,7 +72,7 @@ export function dayXp(tasksOfDay: Task[], streak: number) {
     perTask.set(t.id, xp);
     total += xp;
   }
-  return { total, multiplier, perTask };
+  return { total, multiplier, streakMultiplier: streakMult, goalBonus: goalMult, goalMet, perTask };
 }
 
 // ---------------------------------------------------------------------------
@@ -124,15 +131,16 @@ export function finalizeXp(
   tasks: Task[],
   history: History,
   ledger: XpLedger,
-  todayKey: string
+  todayKey: string,
+  goalFor?: GoalLookup
 ): XpLedger {
   const byDay = groupByDay(tasks);
-  const days: History = { ...summarize(tasks), ...history };
+  const days: History = { ...summarize(tasks, goalFor), ...history };
   let next = ledger;
   for (const [k, list] of Object.entries(byDay)) {
     if (k >= todayKey || ledger[k] !== undefined) continue;
     if (next === ledger) next = { ...ledger };
-    next[k] = dayXp(list, streakBefore(days, k)).total;
+    next[k] = dayXp(list, streakBefore(days, k), days[k]?.goal ?? 0).total;
   }
   return next;
 }
@@ -145,26 +153,46 @@ export type XpSummary = {
   xpForNext: number;
   toNext: number;
   progress: number;
-  today: { xp: number; multiplier: number; streakBefore: number; counted: number };
+  today: {
+    xp: number;
+    multiplier: number;
+    streakMultiplier: number;
+    goalBonus: number;
+    goalMet: boolean;
+    streakBefore: number;
+    counted: number;
+  };
   // XP breakdown for one day, computed from the tasks as they are now.
-  forDay: (key: string) => { total: number; multiplier: number; perTask: Map<string, number> };
+  forDay: (key: string) => {
+    total: number;
+    multiplier: number;
+    streakMultiplier: number;
+    goalBonus: number;
+    goalMet: boolean;
+    perTask: Map<string, number>;
+  };
   // A finished day's XP is frozen, so tasks finished on it no longer earn any.
   isClosed: (key: string) => boolean;
   // Extra XP you would get by finishing this task now (0 if its day is closed,
-  // or the day's cap is already full of better tasks).
+  // or the day's cap is already full of better tasks). Includes the goal bonus
+  // when this is the task that reaches the goal.
   gainIfCompleted: (task: Task) => number;
+  // Finishing this task would be the one that reaches the day's goal.
+  wouldReachGoal: (task: Task) => boolean;
 };
 
 export function computeXp(
   tasks: Task[],
   history: History,
   ledger: XpLedger,
-  todayKey: string
+  todayKey: string,
+  goalFor?: GoalLookup
 ): XpSummary {
   const byDay = groupByDay(tasks);
-  const days: History = { ...summarize(tasks), ...history };
+  const days: History = { ...summarize(tasks, goalFor), ...history };
+  const goalOf = (key: string) => days[key]?.goal ?? 0;
 
-  const forDay = (key: string) => dayXp(byDay[key] ?? [], streakBefore(days, key));
+  const forDay = (key: string) => dayXp(byDay[key] ?? [], streakBefore(days, key), goalOf(key));
 
   // Finished days use their frozen value; anything else is worked out live.
   let total = 0;
@@ -172,7 +200,7 @@ export function computeXp(
     total +=
       k < todayKey && ledger[k] !== undefined
         ? ledger[k]
-        : dayXp(list, streakBefore(days, k)).total;
+        : dayXp(list, streakBefore(days, k), goalOf(k)).total;
   }
   // Days whose tasks have since been deleted still count.
   for (const [k, xp] of Object.entries(ledger)) if (!byDay[k]) total += xp;
@@ -184,12 +212,22 @@ export function computeXp(
     if (task.completedAt || isClosed(key)) return 0;
     const list = byDay[key] ?? [];
     const sb = streakBefore(days, key);
-    const before = dayXp(list, sb).total;
+    const goal = goalOf(key);
+    const before = dayXp(list, sb, goal).total;
     const after = dayXp(
       list.map((t) => (t.id === task.id ? { ...t, completedAt: Date.now() } : t)),
-      sb
+      sb,
+      goal
     ).total;
     return after - before;
+  };
+
+  const wouldReachGoal = (task: Task) => {
+    const key = dayKey(new Date(task.startDate));
+    const goal = goalOf(key);
+    if (task.completedAt || goal <= 0 || isClosed(key)) return false;
+    const finished = (byDay[key] ?? []).filter((t) => !!t.completedAt).length;
+    return finished + 1 === goal;
   };
 
   const today = forDay(todayKey);
@@ -200,11 +238,15 @@ export function computeXp(
     today: {
       xp: today.total,
       multiplier: today.multiplier,
+      streakMultiplier: today.streakMultiplier,
+      goalBonus: today.goalBonus,
+      goalMet: today.goalMet,
       streakBefore: streakBefore(days, todayKey),
       counted: today.perTask.size,
     },
     forDay,
     isClosed,
     gainIfCompleted,
+    wouldReachGoal,
   };
 }

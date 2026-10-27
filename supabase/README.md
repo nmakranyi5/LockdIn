@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these five files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these six files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -17,8 +17,11 @@ In the Supabase dashboard open **SQL Editor → New query** and run these five f
 5. [`migrations/20260101000400_xp.sql`](migrations/20260101000400_xp.sql): the XP ledger (see "Experience and
    levels" below). Skipping it is harmless: XP and levels still work on the device, they just don't sync
    between devices.
+6. [`migrations/20260101000500_goals.sql`](migrations/20260101000500_goals.sql): the daily goal (see
+   "Daily goal" below). Skipping it is harmless: goals still work on the device, they just don't sync
+   between devices or count for friends' shared streaks.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all five.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all six.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.
@@ -135,3 +138,12 @@ Signing out (or deleting the account) unregisters that phone, so it stops receiv
 
 The numbers live in `components/xp.ts` if you want to tune them. Changing the formula affects days that
 haven't been frozen yet; already-finished days keep the XP they earned.
+
+## Daily goal
+
+People choose how many tasks a day must include to count for their streak: "All my tasks" (the default)
+or "At least N tasks in a day" (1 to 10). Reaching the goal gives a bonus on top of the streak
+multiplier: every task completed that day earns `1 + 0.1 × (N − 1)` times its XP (so ×1.2 for 3 tasks), applied
+only on days the goal is reached. A change starts tomorrow, so today can't be gamed; past days keep the goal
+they were played with (`day_history.goal`). The schedule of changes lives in `profiles.goal_schedule`.
+The app only sends goal data when it isn't the default, so it keeps working before the migration is run.

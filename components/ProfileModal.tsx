@@ -18,12 +18,12 @@ import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
 import AvatarView from "./AvatarView";
-import { isImageAvatar, pickAvatarImage } from "./avatar";
+import AvatarModal from "./AvatarModal";
 import GoalModal from "./GoalModal";
 import { allTasksBonus, goalBonus, goalLabel } from "./goals";
 import IconButton from "./ui/IconButton";
 import { MAX_STREAK_BONUS_DAYS, STREAK_BONUS_PER_DAY, XpSummary } from "./xp";
-import { AVATARS, Profile } from "./useProfile";
+import { Profile } from "./useProfile";
 
 type ProfileModalProps = {
   visible: boolean;
@@ -83,21 +83,7 @@ function ProfileContent({
 }: ProfileModalProps) {
   const insets = useSafeAreaInsets();
   const [goalOpen, setGoalOpen] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const choosePhoto = async () => {
-    setPicking(true);
-    setPhotoError(null);
-    try {
-      const avatar = await pickAvatarImage();
-      if (avatar) onChange({ ...profile, avatar });
-    } catch (e) {
-      console.log("Could not pick a picture", e);
-      setPhotoError("Couldn't use that picture. Try another one, or allow photo access in Settings.");
-    } finally {
-      setPicking(false);
-    }
-  };
+  const [avatarOpen, setAvatarOpen] = useState(false);
   // Calendar: WEEKS rows, Monday first, ending with the current week.
   const today = fromKey(todayKey);
   const mondayOffset = (today.getDay() + 6) % 7;
@@ -150,9 +136,19 @@ function ProfileContent({
           >
             <View style={styles.identity}>
               <View style={styles.identityRow}>
-                <View style={styles.avatar}>
-                  <AvatarView avatar={profile.avatar} size={60} fontSize={32} />
-                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change avatar"
+                  onPress={() => setAvatarOpen(true)}
+                >
+                  <View style={styles.avatar}>
+                    <AvatarView avatar={profile.avatar} size={60} fontSize={32} />
+                  </View>
+                  <View style={styles.avatarEdit}>
+                    <Ionicons name="pencil" size={11} color="#fff" />
+                  </View>
+                </TouchableOpacity>
                 <TextInput
                   value={profile.name}
                   onChangeText={(name) => onChange({ ...profile, name })}
@@ -162,37 +158,6 @@ function ProfileContent({
                   style={styles.name}
                 />
               </View>
-              <View style={styles.avatarRow}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Choose a profile picture"
-                  onPress={choosePhoto}
-                  disabled={picking}
-                  style={[
-                    styles.avatarChoice,
-                    isImageAvatar(profile.avatar) && styles.avatarChoiceActive,
-                    picking && { opacity: 0.5 },
-                  ]}
-                >
-                  {isImageAvatar(profile.avatar) ? (
-                    <AvatarView avatar={profile.avatar} size={40} />
-                  ) : (
-                    <Ionicons name="image-outline" size={22} color={colors.accent} />
-                  )}
-                </TouchableOpacity>
-                {AVATARS.map((a) => (
-                  <TouchableOpacity
-                    key={a}
-                    activeOpacity={0.8}
-                    onPress={() => onChange({ ...profile, avatar: a })}
-                    style={[styles.avatarChoice, a === profile.avatar && styles.avatarChoiceActive]}
-                  >
-                    <Text style={styles.avatarChoiceText}>{a}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {photoError && <Text style={styles.photoError}>{photoError}</Text>}
             </View>
 
             <View style={styles.hero}>
@@ -360,6 +325,12 @@ function ProfileContent({
             </View>
           </ScrollView>
         </View>
+      <AvatarModal
+        visible={avatarOpen}
+        avatar={profile.avatar}
+        onSelect={(avatar) => onChange({ ...profile, avatar })}
+        onClose={() => setAvatarOpen(false)}
+      />
       <GoalModal
         visible={goalOpen}
         current={goal.current}
@@ -429,22 +400,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null),
   },
-  // Wraps instead of scrolling, so every choice is always fully visible.
-  avatarRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  avatarChoice: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  avatarEdit: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.background,
   },
-  avatarChoiceActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  avatarChoiceText: { fontSize: 22 },
-  photoError: { fontSize: 13, color: colors.danger },
 
   hero: {
     alignItems: "center",

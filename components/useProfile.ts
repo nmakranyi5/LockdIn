@@ -34,7 +34,11 @@ export type Profile = {
   waterGoal: number;
 };
 
-export const AVATARS = ["🦊", "🐼", "🐯", "🦉", "🐙", "🚀", "⚡", "🌵"];
+export const AVATARS = [
+  "🦊", "🐼", "🐯", "🦉", "🐙", "🚀", "⚡", "🌵",
+  "🐱", "🐶", "🦁", "🐸", "🐵", "🦄", "🐧", "🦋",
+  "🐳", "🐢", "🌈", "🔥", "🌙", "⭐", "🍀", "🎯",
+];
 
 const PROFILE_KEY = "@lockdin_profile";
 const HISTORY_KEY = "@lockdin_history";

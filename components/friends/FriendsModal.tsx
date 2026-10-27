@@ -18,6 +18,7 @@ import {
 } from "react-native-safe-area-context";
 import { colors, radius } from "../../assets/colors/colors";
 import ConfirmModal from "../../app/components/ConfirmModal";
+import AvatarView from "../AvatarView";
 import Button from "../ui/Button";
 import IconButton from "../ui/IconButton";
 import {
@@ -502,7 +503,7 @@ const medal = (rank: number) =>
 function Avatar({ emoji, small }: { emoji: string; small?: boolean }) {
   return (
     <View style={[styles.avatar, small && styles.avatarSmall]}>
-      <Text style={[styles.avatarText, small && { fontSize: 17 }]}>{emoji}</Text>
+      <AvatarView avatar={emoji} size={small ? 32 : 38} fontSize={small ? 17 : 20} />
     </View>
   );
 }
@@ -610,6 +611,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.surface,
+    overflow: "hidden",
   },
   avatarSmall: { width: 32, height: 32, borderRadius: 16 },
   avatarText: { fontSize: 20 },

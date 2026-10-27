@@ -662,7 +662,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   // On short screens (landscape phones) the day header scrolls with the list
   // so the tasks get the room.
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   // Decided after mount so the static web pre-render (height 0) matches.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -685,10 +685,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           onPress={() => setCalendarOpen(true)}
         >
           <View style={styles.dayTitleRow}>
-            <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
+            {/* Same width as the icon, so the title itself stays centred. */}
+            <View style={styles.dayTitleIcon} />
+            <Text
+              style={[styles.dayTitle, { flexShrink: 1 }, windowWidth < 340 && { fontSize: 24 }]} numberOfLines={1} adjustsFontSizeToFit>
               {dayTitle()}
             </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+            <View style={styles.dayTitleIcon}>
+              <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+            </View>
           </View>
           <Text style={styles.daySub} numberOfLines={2}>
             {daySubtitle()}
@@ -1074,7 +1079,8 @@ const styles = StyleSheet.create({
   },
   // Takes whatever room the arrows leave, so a longer subtitle wraps instead of
   // pushing the buttons off-screen.
-  dayTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%" },
+  dayTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: "100%" },
+  dayTitleIcon: { width: 20, alignItems: "center" },
   dayTitleWrap: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 8 },
   dayTitle: {
     fontSize: 34,

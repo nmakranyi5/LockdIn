@@ -51,6 +51,8 @@ type Meta = {
   xpSynced: string[];
   // day -> the edit time of the water count the server last got
   waterSynced: Record<string, number>;
+  // The server refused the profile picture (avatar SQL not run yet): keep it local.
+  avatarBlocked: boolean;
 };
 
 const emptyMeta = (userId: string | null = null): Meta => ({
@@ -65,6 +67,7 @@ const emptyMeta = (userId: string | null = null): Meta => ({
   historySynced: [],
   xpSynced: [],
   waterSynced: {},
+  avatarBlocked: false,
 });
 
 export type SyncStatus = "off" | "idle" | "syncing" | "error";
@@ -90,8 +93,9 @@ const unsyncedWater = (m: Meta, w: WaterLog) =>
   Object.keys(w).filter((d) => m.waterSynced[d] !== w[d].at);
 
 // An account that never chose a goal doesn't overrule the ones on this device.
-const withGoal = (remote: Profile, local: Profile): Profile => ({
+const withGoal = (remote: Profile, local: Profile, keepAvatar = false): Profile => ({
   ...remote,
+  avatar: keepAvatar ? local.avatar : remote.avatar,
   goalSchedule: isDefaultSchedule(remote.goalSchedule) ? local.goalSchedule : remote.goalSchedule,
   waterGoal: remote.waterGoal === DEFAULT_WATER_GOAL ? local.waterGoal : remote.waterGoal,
 });
@@ -266,6 +270,8 @@ export function useSync(o: Options) {
 
     // 4. profile (a name already stored in the account beats a blank local one)
     const local = profileRef.current;
+    // Try the picture again until the server accepts it.
+    if (m.avatarBlocked) m.profileDirty = true;
     const adopt = (remote: Profile) => {
       m.profileSig = profileSig(remote);
       m.profileDirty = false;
@@ -274,7 +280,7 @@ export function useSync(o: Options) {
     if (!m.profilePulled) {
       const remote = await pullProfile(client, uid);
       if (remote && (remote.name.trim() || hasChoices(remote))) {
-        const merged = withGoal(remote, local);
+        const merged = withGoal(remote, local, m.avatarBlocked);
         adopt(merged);
         // The account hasn't chosen some of these yet: ours still have to go up.
         if (profileSig(merged) !== profileSig(remote)) m.profileDirty = true;
@@ -284,11 +290,12 @@ export function useSync(o: Options) {
     }
     if (m.profileDirty) {
       const sent = profileSig(profileRef.current);
-      await pushProfile(client, uid, profileRef.current);
+      const { avatarSkipped } = await pushProfile(client, uid, profileRef.current);
+      m.avatarBlocked = avatarSkipped;
       if (m.profileSig === sent) m.profileDirty = false;
     } else {
       const remote = await pullProfile(client, uid);
-      const merged = remote && withGoal(remote, profileRef.current);
+      const merged = remote && withGoal(remote, profileRef.current, m.avatarBlocked);
       if (merged && profileSig(merged) !== profileSig(profileRef.current)) adopt(merged);
     }
     persist();

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { History } from "../streak";
 import { Task } from "../taskState";
 import { XpLedger } from "../xp";
+import { isImageAvatar, normalizeAvatar } from "../avatar";
 import { DEFAULT_WATER_GOAL, normalizeWater, normalizeWaterGoal, WaterLog } from "../water";
 import { GoalSchedule, isServerDefaultSchedule, normalizeSchedule, SERVER_DEFAULT_SCHEDULE } from "../goals";
 import {
@@ -186,7 +187,7 @@ export async function pullProfile(client: SupabaseClient, userId: string) {
   const row = data as { name: string; avatar: string; goal_schedule?: unknown; water_goal?: unknown };
   return {
     name: row.name,
-    avatar: row.avatar,
+    avatar: normalizeAvatar(row.avatar, "🦊"),
     // A missing column or value means nothing has been chosen.
     goalSchedule: row.goal_schedule === undefined ? SERVER_DEFAULT_SCHEDULE : normalizeSchedule(row.goal_schedule),
     // Before the water SQL has been run there is no column: nothing chosen.
@@ -207,7 +208,16 @@ export async function pushProfile(client: SupabaseClient, userId: string, p: Rem
     delete row.water_goal;
     ({ error } = await client.from("profiles").upsert(row, { onConflict: "id" }));
   }
+  // Before the avatar SQL has been run a picture is too long for the column:
+  // sync everything else and report it, so the picture stays on this device.
+  let avatarSkipped = false;
+  if (error && isImageAvatar(p.avatar) && /avatar/.test(`${error.message ?? ""}`)) {
+    avatarSkipped = true;
+    delete row.avatar;
+    ({ error } = await client.from("profiles").upsert(row, { onConflict: "id" }));
+  }
   check(error);
+  return { avatarSkipped };
 }
 // Each finished day's XP is write-once, first device to report wins.
 export async function pushXp(client: SupabaseClient, userId: string, ledger: XpLedger, days: string[]) {

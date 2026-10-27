@@ -2,7 +2,7 @@
 
 ## 1. Create the tables
 
-In the Supabase dashboard open **SQL Editor → New query** and run these seven files, in order, once each:
+In the Supabase dashboard open **SQL Editor → New query** and run these eight files, in order, once each:
 
 1. [`migrations/20260101000000_init.sql`](migrations/20260101000000_init.sql): tables, security rules, triggers
 2. [`migrations/20260101000100_grants.sql`](migrations/20260101000100_grants.sql): table access for signed-in users.
@@ -22,8 +22,11 @@ In the Supabase dashboard open **SQL Editor → New query** and run these seven 
    between devices or count for friends' shared streaks.
 7. [`migrations/20260101000600_water.sql`](migrations/20260101000600_water.sql): the hydration tracker (see
    "Hydration" below). Skipping it is harmless: water still works on the device, it just doesn't sync.
+8. [`migrations/20260101000700_avatars.sql`](migrations/20260101000700_avatars.sql): lets a profile picture be
+   stored as the avatar. Skipping it is harmless: a picture stays on the device that chose it (everything else
+   keeps syncing) and uploads once this is run.
 
-(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all seven.)
+(Or, with the Supabase CLI: `supabase link` then `supabase db push`, which runs all eight.)
 
 It creates `profiles`, `tasks` and `day_history`, turns on **row-level security** (every
 user can only read and write their own rows), and adds the `delete_my_account()` function.
@@ -166,3 +169,10 @@ owner like XP.
 so rows are updated in place and the newest edit wins when two devices disagree (`updated_at` is the time of
 the edit on the device). The target is `profiles.water_goal`. As with goals, the app keeps syncing everything
 else before this migration is run and uploads the water days once the table exists.
+
+## Profile pictures
+
+Besides the emoji, a person can pick a photo (**Profile → the picture tile**). The app crops it to a centred
+square, shrinks it to 128 px and stores it in `profiles.avatar` as a small JPEG data URI (a few KB), so it syncs
+and shows up for friends without any file storage. The column only accepts an emoji (16 characters or fewer)
+or a `data:image/jpeg;base64,` string of at most 24000 characters.

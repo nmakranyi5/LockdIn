@@ -15,6 +15,7 @@ import {
   migrateLegacySchedule,
   SERVER_DEFAULT_SCHEDULE,
 } from "./goals";
+import { normalizeAvatar } from "./avatar";
 import {
   addGlasses,
   DEFAULT_WATER_GOAL,
@@ -69,6 +70,7 @@ export function useProfile(tasks: Task[], tasksLoaded: boolean, now: number) {
           setProfile({
             ...DEFAULT_PROFILE,
             ...saved,
+            avatar: normalizeAvatar(saved.avatar, AVATARS[0]),
             // A profile saved before goals existed was on "all my tasks".
             goalSchedule: migrateLegacySchedule(
               normalizeSchedule(saved.goalSchedule ?? SERVER_DEFAULT_SCHEDULE),

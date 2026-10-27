@@ -11,6 +11,7 @@ import { AppState } from "react-native";
 import { cancelTaskNotifications, scheduleCheckInNotifications, scheduleTaskNotifications } from "../scheduleTask";
 import { History } from "../streak";
 import { Task } from "../taskState";
+import { mergeWater, WaterLog, DEFAULT_WATER_GOAL } from "../water";
 import { XpLedger } from "../xp";
 import { AVATARS, DEFAULT_PROFILE, Profile } from "../useProfile";
 import { supabase } from "./client";
@@ -19,11 +20,13 @@ import {
   isDefaultSchedule,
   pullHistory,
   pullProfile,
+  pullWater,
   pullXp,
   pullTasks,
   pushDeletes,
   pushHistory,
   pushProfile,
+  pushWater,
   pushTasks,
   pushXp,
 } from "./engine";
@@ -46,6 +49,8 @@ type Meta = {
   profilePulled: boolean;
   historySynced: string[];
   xpSynced: string[];
+  // day -> the edit time of the water count the server last got
+  waterSynced: Record<string, number>;
 };
 
 const emptyMeta = (userId: string | null = null): Meta => ({
@@ -59,6 +64,7 @@ const emptyMeta = (userId: string | null = null): Meta => ({
   profilePulled: false,
   historySynced: [],
   xpSynced: [],
+  waterSynced: {},
 });
 
 export type SyncStatus = "off" | "idle" | "syncing" | "error";
@@ -75,13 +81,23 @@ type Options = {
   setHistory: Dispatch<SetStateAction<History>>;
   xpLedger: XpLedger;
   setXpLedger: Dispatch<SetStateAction<XpLedger>>;
+  water: WaterLog;
+  setWater: Dispatch<SetStateAction<WaterLog>>;
 };
 
-// An account that never chose a goal doesn't overrule the one on this device.
-const withGoal = (remote: Profile, local: Profile): Profile =>
-  isDefaultSchedule(remote.goalSchedule) ? { ...remote, goalSchedule: local.goalSchedule } : remote;
+// An account that never chose a goal doesn't overrule the ones on this device.
+const withGoal = (remote: Profile, local: Profile): Profile => ({
+  ...remote,
+  goalSchedule: isDefaultSchedule(remote.goalSchedule) ? local.goalSchedule : remote.goalSchedule,
+  waterGoal: remote.waterGoal === DEFAULT_WATER_GOAL ? local.waterGoal : remote.waterGoal,
+});
 
-const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar, p.goalSchedule]);
+// Has this profile chosen anything beyond what the server already assumes?
+const hasChoices = (p: Profile) =>
+  !isDefaultSchedule(p.goalSchedule) || p.waterGoal !== DEFAULT_WATER_GOAL;
+
+const profileSig = (p: Profile) =>
+  JSON.stringify([p.name, p.avatar, p.goalSchedule, p.waterGoal]);
 
 // Offline-first sync between local state and Supabase. Local storage stays the
 // source for the UI; this pushes local changes up and pulls remote ones down.
@@ -97,6 +113,8 @@ export function useSync(o: Options) {
     setHistory,
     xpLedger,
     setXpLedger,
+    water,
+    setWater,
   } = o;
 
   const [status, setStatus] = useState<SyncStatus>(userId ? "idle" : "off");
@@ -111,10 +129,12 @@ export function useSync(o: Options) {
   const profileRef = useRef(profile);
   const historyRef = useRef(history);
   const xpRef = useRef(xpLedger);
+  const waterRef = useRef(water);
   tasksRef.current = tasks;
   profileRef.current = profile;
   historyRef.current = history;
   xpRef.current = xpLedger;
+  waterRef.current = water;
 
   const accountReadyRef = useRef(false);
   accountReadyRef.current = accountReady;
@@ -127,6 +147,12 @@ export function useSync(o: Options) {
   const persist = () =>
     AsyncStorage.setItem(META_KEY, JSON.stringify(metaRef.current)).catch(() => {});
 
+  // Days whose water count changed since the server last got it.
+  const unsyncedWater = () =>
+    Object.keys(waterRef.current).filter(
+      (d) => metaRef.current.waterSynced[d] !== waterRef.current[d].at
+    );
+
   const countPending = () => {
     const m = metaRef.current;
     const unsyncedDays = Object.keys(historyRef.current).filter(
@@ -136,7 +162,12 @@ export function useSync(o: Options) {
       (d) => xpRef.current[d] > 0 && !m.xpSynced.includes(d)
     ).length;
     setPending(
-      m.dirty.length + m.tombstones.length + (m.profileDirty ? 1 : 0) + unsyncedDays + unsyncedXp
+      m.dirty.length +
+        m.tombstones.length +
+        (m.profileDirty ? 1 : 0) +
+        unsyncedDays +
+        unsyncedXp +
+        unsyncedWater().length
     );
   };
 
@@ -162,10 +193,11 @@ export function useSync(o: Options) {
       setTasks([]);
       setHistory({});
       setXpLedger({});
+      setWater({});
       setProfile(DEFAULT_PROFILE);
       setPending(0);
     },
-    [setTasks, setHistory, setXpLedger, setProfile]
+    [setTasks, setHistory, setXpLedger, setWater, setProfile]
   );
 
   // ---- which account owns the local data?
@@ -243,12 +275,12 @@ export function useSync(o: Options) {
     };
     if (!m.profilePulled) {
       const remote = await pullProfile(client, uid);
-      if (remote && (remote.name.trim() || !isDefaultSchedule(remote.goalSchedule))) {
-        adopt(withGoal(remote, local));
-        // The account has no goal of its own yet: ours still has to go up.
-        if (isDefaultSchedule(remote.goalSchedule) && !isDefaultSchedule(local.goalSchedule))
-          m.profileDirty = true;
-      } else if (local.name || local.avatar !== AVATARS[0] || !isDefaultSchedule(local.goalSchedule))
+      if (remote && (remote.name.trim() || hasChoices(remote))) {
+        const merged = withGoal(remote, local);
+        adopt(merged);
+        // The account hasn't chosen some of these yet: ours still have to go up.
+        if (profileSig(merged) !== profileSig(remote)) m.profileDirty = true;
+      } else if (local.name || local.avatar !== AVATARS[0] || hasChoices(local))
         m.profileDirty = true;
       m.profilePulled = true;
     }
@@ -296,6 +328,21 @@ export function useSync(o: Options) {
     for (const d of xpDays) if (!m.xpSynced.includes(d)) m.xpSynced.push(d);
     persist();
 
+    // 6c. hydration: take whatever is newer remotely first, then push our newer days
+    const remoteWater = await pullWater(client, uid);
+    if (remoteWater) {
+      const merged = mergeWater(waterRef.current, remoteWater);
+      if (merged !== waterRef.current) setWater(merged);
+      for (const [d, e] of Object.entries(remoteWater)) {
+        if (merged[d] && merged[d].at === e.at) m.waterSynced[d] = e.at;
+      }
+      const toPush = Object.keys(merged).filter((d) => m.waterSynced[d] !== merged[d].at);
+      if (toPush.length && (await pushWater(client, uid, merged, toPush))) {
+        for (const d of toPush) m.waterSynced[d] = merged[d].at;
+      }
+      persist();
+    }
+
     // 7. line this device's local notifications up with what changed
     try {
       preview.removed.forEach((t) => cancelTaskNotifications(t));
@@ -334,7 +381,7 @@ export function useSync(o: Options) {
     } catch (e) {
       console.log("Could not update local notifications after sync", e);
     }
-  }, [setTasks, setHistory, setXpLedger, setProfile]);
+  }, [setTasks, setHistory, setXpLedger, setWater, setProfile]);
 
   const syncNow = useCallback(async (): Promise<void> => {
     const uid = userIdRef.current;
@@ -422,6 +469,14 @@ export function useSync(o: Options) {
       scheduleSync();
     }
   }, [history, accountReady, scheduleSync]);
+
+  useEffect(() => {
+    if (!accountReady) return;
+    if (unsyncedWater().length) {
+      countPending();
+      scheduleSync();
+    }
+  }, [water, accountReady, scheduleSync]);
 
   useEffect(() => {
     if (!accountReady) return;

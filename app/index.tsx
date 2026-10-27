@@ -26,6 +26,9 @@ import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import CalendarModal from "../components/CalendarModal";
+import WaterCard from "../components/WaterCard";
+import WaterModal from "../components/WaterModal";
+import { glassesOn } from "../components/water";
 import { dayKey } from "../components/streak";
 import { pendingGoal } from "../components/goals";
 import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../components/xp";
@@ -114,6 +117,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [waterOpen, setWaterOpen] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // A task the person has said they finished, awaiting confirmation. `itemId`
@@ -430,6 +434,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     goalFor,
     changeGoal,
     todayKey,
+    water,
+    setWater,
+    addWater,
+    changeWaterGoal,
     loaded: profileLoaded,
   } = useProfile(tasks, loaded, now);
 
@@ -444,6 +452,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setHistory,
     xpLedger,
     setXpLedger,
+    water,
+    setWater,
   });
 
   const social = auth.configured && !!userId;
@@ -760,6 +770,16 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
             </View>
           )}
 
+        {isSameDay(selectedDay, today) && (
+          <WaterCard
+            glasses={glassesOn(water, todayKey)}
+            goal={profile.waterGoal}
+            onAdd={() => addWater(1)}
+            onUndo={() => addWater(-1)}
+            onOpen={() => setWaterOpen(true)}
+          />
+        )}
+
         {dayTasks.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyCircle}>
@@ -822,6 +842,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           )}
         </View>
       )}
+
+      <WaterModal
+        visible={waterOpen}
+        goal={profile.waterGoal}
+        log={water}
+        todayKey={todayKey}
+        onChangeGoal={changeWaterGoal}
+        onClose={() => setWaterOpen(false)}
+      />
 
       <CalendarModal
         visible={calendarOpen}

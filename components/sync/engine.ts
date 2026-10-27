@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { History } from "../streak";
 import { Task } from "../taskState";
 import { XpLedger } from "../xp";
+import { DEFAULT_WATER_GOAL, normalizeWater, normalizeWaterGoal, WaterLog } from "../water";
 import { GoalSchedule, isServerDefaultSchedule, normalizeSchedule, SERVER_DEFAULT_SCHEDULE } from "../goals";
 import {
   HistoryRow,
@@ -158,7 +159,12 @@ export async function pullHistory(client: SupabaseClient, userId: string): Promi
   return out;
 }
 
-export type RemoteProfile = { name: string; avatar: string; goalSchedule: GoalSchedule };
+export type RemoteProfile = {
+  name: string;
+  avatar: string;
+  goalSchedule: GoalSchedule;
+  waterGoal: number;
+};
 
 // Has this profile chosen anything the server doesn't already assume
 // ("all my tasks")? Only then does the goal need to be sent or adopted.
@@ -177,12 +183,14 @@ export async function pullProfile(client: SupabaseClient, userId: string) {
     .maybeSingle();
   check(error);
   if (!data) return null;
-  const row = data as { name: string; avatar: string; goal_schedule?: unknown };
+  const row = data as { name: string; avatar: string; goal_schedule?: unknown; water_goal?: unknown };
   return {
     name: row.name,
     avatar: row.avatar,
     // A missing column or value means nothing has been chosen.
     goalSchedule: row.goal_schedule === undefined ? SERVER_DEFAULT_SCHEDULE : normalizeSchedule(row.goal_schedule),
+    // Before the water SQL has been run there is no column: nothing chosen.
+    waterGoal: row.water_goal === undefined ? DEFAULT_WATER_GOAL : normalizeWaterGoal(row.water_goal),
   } as RemoteProfile;
 }
 
@@ -191,9 +199,12 @@ export async function pushProfile(client: SupabaseClient, userId: string, p: Rem
   // Only sent once a goal has been chosen, so everyone else keeps syncing
   // without needing the goals SQL.
   if (!isDefaultSchedule(p.goalSchedule)) row.goal_schedule = p.goalSchedule;
+  if (p.waterGoal !== DEFAULT_WATER_GOAL) row.water_goal = p.waterGoal;
   let { error } = await client.from("profiles").upsert(row, { onConflict: "id" });
-  if (row.goal_schedule && isMissingGoalColumn(error)) {
+  if ((row.goal_schedule || row.water_goal) && isMissingGoalColumn(error)) {
+    // Before the goals / water SQL has been run: sync the rest.
     delete row.goal_schedule;
+    delete row.water_goal;
     ({ error } = await client.from("profiles").upsert(row, { onConflict: "id" }));
   }
   check(error);
@@ -225,3 +236,44 @@ export async function pullXp(client: SupabaseClient, userId: string): Promise<Xp
   return out;
 }
 
+
+// ---- hydration: a day's count is edited in place, the newest edit wins
+// Before the water SQL has been run the table doesn't exist: skip hydration
+// sync quietly (nothing is lost, it just stays on this device).
+const isMissingWaterTable = (error: { code?: string; message?: string } | null) =>
+  !!error && (error.code === "PGRST205" || error.code === "42P01" || /water_log/.test(error.message ?? ""));
+
+// Returns false when the table isn't there, so the days stay unsynced.
+export async function pushWater(client: SupabaseClient, userId: string, log: WaterLog, days: string[]) {
+  const rows = days.map((day) => ({
+    user_id: userId,
+    day,
+    glasses: log[day].n,
+    updated_at: new Date(log[day].at || Date.now()).toISOString(),
+  }));
+  for (const part of chunks(rows, CHUNK)) {
+    const { error } = await client.from("water_log").upsert(part, { onConflict: "user_id,day" });
+    if (isMissingWaterTable(error)) return false;
+    check(error);
+  }
+  return true;
+}
+
+export async function pullWater(client: SupabaseClient, userId: string): Promise<WaterLog | null> {
+  const raw: Record<string, { n: number; at: number }> = {};
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client
+      .from("water_log")
+      .select("day, glasses, updated_at")
+      .eq("user_id", userId)
+      .order("day", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (isMissingWaterTable(error)) return null;
+    check(error);
+    for (const r of (data ?? []) as { day: string; glasses: number; updated_at: string }[]) {
+      raw[r.day] = { n: r.glasses, at: Date.parse(r.updated_at) || 0 };
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  return normalizeWater(raw);
+}

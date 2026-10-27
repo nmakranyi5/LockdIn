@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import {
   Modal,
   Platform,
@@ -16,7 +17,10 @@ import {
 import { colors, radius } from "../assets/colors/colors";
 import { addDays } from "./taskState";
 import { dayKey, DayStatus, fromKey, MILESTONES, StreakStats } from "./streak";
+import GoalModal from "./GoalModal";
+import { allTasksBonus, goalBonus, goalLabel } from "./goals";
 import IconButton from "./ui/IconButton";
+import { MAX_STREAK_BONUS_DAYS, STREAK_BONUS_PER_DAY, XpSummary } from "./xp";
 import { AVATARS, Profile } from "./useProfile";
 
 type ProfileModalProps = {
@@ -25,7 +29,17 @@ type ProfileModalProps = {
   profile: Profile;
   onChange: (p: Profile) => void;
   stats: StreakStats;
+  xp: XpSummary;
   todayKey: string;
+  // Daily goal: tasks to finish per day (0 = all), a change waiting for
+  // tomorrow, and how today is going.
+  goal: {
+    current: number;
+    pending: number | null;
+    doneToday: number;
+    totalToday: number;
+  };
+  onChangeGoal: (goal: number) => void;
 };
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -60,9 +74,13 @@ function ProfileContent({
   profile,
   onChange,
   stats,
+  xp,
   todayKey,
+  goal,
+  onChangeGoal,
 }: ProfileModalProps) {
   const insets = useSafeAreaInsets();
+  const [goalOpen, setGoalOpen] = useState(false);
   // Calendar: WEEKS rows, Monday first, ending with the current week.
   const today = fromKey(todayKey);
   const mondayOffset = (today.getDay() + 6) % 7;
@@ -72,13 +90,22 @@ function ProfileContent({
   const weekRate =
     stats.weekTotal > 0 ? Math.round((stats.weekDone / stats.weekTotal) * 100) : null;
 
+  const left = Math.max(0, goal.current - goal.doneToday);
   const heroLine =
     stats.today === "complete"
-      ? "Today's done. Nice work."
+      ? goal.current > 0
+        ? "Today's goal is done. Nice work."
+        : "Today's done. Nice work."
       : stats.today === "pending"
-      ? "Finish today's tasks to extend your streak."
+      ? goal.current > 0
+        ? `Finish ${left} more task${left === 1 ? "" : "s"} today to extend your streak.`
+        : "Finish today's tasks to extend your streak."
       : stats.current > 0
-      ? "Add a task today to keep it going."
+      ? goal.current > 0
+        ? `Add and finish ${goal.current} task${goal.current === 1 ? "" : "s"} today to keep it going.`
+        : "Add a task today to keep it going."
+      : goal.current > 0
+      ? `Finish at least ${goal.current} task${goal.current === 1 ? "" : "s"} in a day to start a streak.`
       : "Complete all of a day's tasks to start a streak.";
 
   return (
@@ -149,6 +176,92 @@ function ProfileContent({
               <Text style={styles.heroHint}>{heroLine}</Text>
             </View>
 
+            <View style={styles.goalCard}>
+              <View style={styles.goalTop}>
+                <View style={styles.goalBadge}>
+                  <Ionicons name="flag" size={18} color={colors.accent} />
+                </View>
+                <View style={styles.levelText}>
+                  <Text style={styles.levelSub}>Daily goal</Text>
+                  <Text style={styles.goalTitle}>{goalLabel(goal.current)}</Text>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change daily goal"
+                  style={styles.goalChange}
+                  onPress={() => setGoalOpen(true)}
+                >
+                  <Text style={styles.goalChangeText}>Change</Text>
+                </TouchableOpacity>
+              </View>
+              {goal.current > 0 ? (
+                <>
+                  <View style={styles.xpTrack}>
+                    <View
+                      style={[
+                        styles.goalFill,
+                        { width: `${Math.min(100, Math.round((goal.doneToday / goal.current) * 100))}%` },
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.xpMeta}>
+                    <Text style={styles.xpMetaText}>
+                      Today: {Math.min(goal.doneToday, goal.current)} / {goal.current}
+                      {goal.doneToday >= goal.current ? " ✓ goal reached" : ""}
+                    </Text>
+                    <Text style={styles.xpMetaText}>
+                      ×{goalBonus(goal.current).toFixed(2)} XP bonus
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.bonus}>
+                  Today: {goal.doneToday} of {goal.totalToday} task{goal.totalToday === 1 ? "" : "s"} done.
+                  {goal.totalToday > 1
+                    ? ` Finish them all for ×${allTasksBonus(goal.totalToday).toFixed(2)} XP.`
+                    : ""}
+                </Text>
+              )}
+              {goal.pending !== null && goal.pending !== goal.current && (
+                <Text style={styles.bonus}>Tomorrow: {goalLabel(goal.pending)}</Text>
+              )}
+            </View>
+
+            <View style={styles.levelCard} accessibilityLabel={`Level ${xp.level}, ${xp.total} XP`}>
+              <View style={styles.levelTop}>
+                <View style={styles.levelBadge}>
+                  <Ionicons name="star" size={20} color={colors.warning} />
+                </View>
+                <View style={styles.levelText}>
+                  <Text style={styles.levelTitle}>
+                    Level {xp.level} · {xp.title}
+                  </Text>
+                  <Text style={styles.levelSub}>{xp.total.toLocaleString()} XP total</Text>
+                </View>
+                <View style={styles.todayXp}>
+                  <Text style={styles.todayXpNum}>+{xp.today.xp}</Text>
+                  <Text style={styles.todayXpLabel}>today</Text>
+                </View>
+              </View>
+              <View style={styles.xpTrack}>
+                <View style={[styles.xpFill, { width: `${Math.round(xp.progress * 100)}%` }]} />
+              </View>
+              <View style={styles.xpMeta}>
+                <Text style={styles.xpMetaText}>
+                  {xp.xpIntoLevel.toLocaleString()} / {xp.xpForNext.toLocaleString()} XP
+                </Text>
+                <Text style={styles.xpMetaText}>
+                  {xp.toNext.toLocaleString()} to level {xp.level + 1}
+                </Text>
+              </View>
+              <Text style={styles.bonus}>
+                {xp.today.streakBefore > 0
+                  ? `🔥 ×${xp.today.multiplier.toFixed(2)} streak bonus on today's XP`
+                  : `Build a streak for bonus XP: +${Math.round(STREAK_BONUS_PER_DAY * 100)}% per day, up to ×${(1 + STREAK_BONUS_PER_DAY * MAX_STREAK_BONUS_DAYS).toFixed(1)}.`}
+              </Text>
+            </View>
+
             <View style={styles.statsRow}>
               <Stat label="Longest" value={`${stats.longest}`} />
               <Stat label="Completed" value={`${stats.totalCompleted}`} />
@@ -215,6 +328,13 @@ function ProfileContent({
             </View>
           </ScrollView>
         </View>
+      <GoalModal
+        visible={goalOpen}
+        current={goal.current}
+        pending={goal.pending}
+        onSave={onChangeGoal}
+        onClose={() => setGoalOpen(false)}
+      />
     </View>
   );
 }
@@ -310,6 +430,60 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 16, fontWeight: "600", color: colors.textMuted },
   heroHint: { marginTop: 10, fontSize: 14, color: colors.textMuted, textAlign: "center" },
 
+  goalCard: {
+    gap: 10,
+    padding: 16,
+    borderRadius: radius.xl,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  goalTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  goalBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accentSoft,
+  },
+  goalTitle: { fontSize: 16, fontWeight: "800", color: colors.textPrimary, marginTop: 1 },
+  goalChange: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentSoft,
+  },
+  goalChangeText: { fontSize: 14, fontWeight: "700", color: colors.accent },
+  goalFill: { height: "100%", borderRadius: 4, backgroundColor: colors.accent },
+  levelCard: {
+    gap: 10,
+    padding: 16,
+    borderRadius: radius.xl,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  levelTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  levelBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.warningSoft,
+  },
+  levelText: { flex: 1, minWidth: 0 },
+  levelTitle: { fontSize: 17, fontWeight: "800", color: colors.textPrimary },
+  levelSub: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  todayXp: { alignItems: "flex-end" },
+  todayXpNum: { fontSize: 20, fontWeight: "800", color: colors.success },
+  todayXpLabel: { fontSize: 11, fontWeight: "600", color: colors.textMuted },
+  xpTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceRaised, overflow: "hidden" },
+  xpFill: { height: "100%", borderRadius: 4, backgroundColor: colors.warning },
+  xpMeta: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  xpMetaText: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
+  bonus: { fontSize: 13, lineHeight: 18, color: colors.textLabel },
   statsRow: { flexDirection: "row", gap: 10 },
   stat: {
     flex: 1,

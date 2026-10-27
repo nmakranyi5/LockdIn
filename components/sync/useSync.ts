@@ -11,17 +11,21 @@ import { AppState } from "react-native";
 import { cancelTaskNotifications, scheduleCheckInNotifications, scheduleTaskNotifications } from "../scheduleTask";
 import { History } from "../streak";
 import { Task } from "../taskState";
+import { XpLedger } from "../xp";
 import { AVATARS, DEFAULT_PROFILE, Profile } from "../useProfile";
 import { supabase } from "./client";
 import {
   applyRemote,
+  isDefaultSchedule,
   pullHistory,
   pullProfile,
+  pullXp,
   pullTasks,
   pushDeletes,
   pushHistory,
   pushProfile,
   pushTasks,
+  pushXp,
 } from "./engine";
 import { friendlyError } from "./errors";
 import { historyToRows, syncSig } from "./mapping";
@@ -41,6 +45,7 @@ type Meta = {
   profileDirty: boolean;
   profilePulled: boolean;
   historySynced: string[];
+  xpSynced: string[];
 };
 
 const emptyMeta = (userId: string | null = null): Meta => ({
@@ -53,6 +58,7 @@ const emptyMeta = (userId: string | null = null): Meta => ({
   profileDirty: false,
   profilePulled: false,
   historySynced: [],
+  xpSynced: [],
 });
 
 export type SyncStatus = "off" | "idle" | "syncing" | "error";
@@ -67,14 +73,31 @@ type Options = {
   setProfile: Dispatch<SetStateAction<Profile>>;
   history: History;
   setHistory: Dispatch<SetStateAction<History>>;
+  xpLedger: XpLedger;
+  setXpLedger: Dispatch<SetStateAction<XpLedger>>;
 };
 
-const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar]);
+// An account that never chose a goal doesn't overrule the one on this device.
+const withGoal = (remote: Profile, local: Profile): Profile =>
+  isDefaultSchedule(remote.goalSchedule) ? { ...remote, goalSchedule: local.goalSchedule } : remote;
+
+const profileSig = (p: Profile) => JSON.stringify([p.name, p.avatar, p.goalSchedule]);
 
 // Offline-first sync between local state and Supabase. Local storage stays the
 // source for the UI; this pushes local changes up and pulls remote ones down.
 export function useSync(o: Options) {
-  const { userId, ready, tasks, setTasks, profile, setProfile, history, setHistory } = o;
+  const {
+    userId,
+    ready,
+    tasks,
+    setTasks,
+    profile,
+    setProfile,
+    history,
+    setHistory,
+    xpLedger,
+    setXpLedger,
+  } = o;
 
   const [status, setStatus] = useState<SyncStatus>(userId ? "idle" : "off");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -87,9 +110,11 @@ export function useSync(o: Options) {
   const tasksRef = useRef(tasks);
   const profileRef = useRef(profile);
   const historyRef = useRef(history);
+  const xpRef = useRef(xpLedger);
   tasksRef.current = tasks;
   profileRef.current = profile;
   historyRef.current = history;
+  xpRef.current = xpLedger;
 
   const accountReadyRef = useRef(false);
   accountReadyRef.current = accountReady;
@@ -107,7 +132,12 @@ export function useSync(o: Options) {
     const unsyncedDays = Object.keys(historyRef.current).filter(
       (d) => !m.historySynced.includes(d)
     ).length;
-    setPending(m.dirty.length + m.tombstones.length + (m.profileDirty ? 1 : 0) + unsyncedDays);
+    const unsyncedXp = Object.keys(xpRef.current).filter(
+      (d) => xpRef.current[d] > 0 && !m.xpSynced.includes(d)
+    ).length;
+    setPending(
+      m.dirty.length + m.tombstones.length + (m.profileDirty ? 1 : 0) + unsyncedDays + unsyncedXp
+    );
   };
 
   // ---- load bookkeeping
@@ -131,10 +161,11 @@ export function useSync(o: Options) {
       persist();
       setTasks([]);
       setHistory({});
+      setXpLedger({});
       setProfile(DEFAULT_PROFILE);
       setPending(0);
     },
-    [setTasks, setHistory, setProfile]
+    [setTasks, setHistory, setXpLedger, setProfile]
   );
 
   // ---- which account owns the local data?
@@ -193,6 +224,16 @@ export function useSync(o: Options) {
       persist();
     }
 
+    // 3b. XP for finished days (days that earned nothing aren't worth uploading)
+    const unsyncedXp = Object.keys(xpRef.current).filter(
+      (d) => xpRef.current[d] > 0 && !m.xpSynced.includes(d)
+    );
+    if (unsyncedXp.length) {
+      await pushXp(client, uid, xpRef.current, unsyncedXp);
+      m.xpSynced.push(...unsyncedXp);
+      persist();
+    }
+
     // 4. profile (a name already stored in the account beats a blank local one)
     const local = profileRef.current;
     const adopt = (remote: Profile) => {
@@ -202,8 +243,13 @@ export function useSync(o: Options) {
     };
     if (!m.profilePulled) {
       const remote = await pullProfile(client, uid);
-      if (remote && remote.name.trim()) adopt(remote);
-      else if (local.name || local.avatar !== AVATARS[0]) m.profileDirty = true;
+      if (remote && (remote.name.trim() || !isDefaultSchedule(remote.goalSchedule))) {
+        adopt(withGoal(remote, local));
+        // The account has no goal of its own yet: ours still has to go up.
+        if (isDefaultSchedule(remote.goalSchedule) && !isDefaultSchedule(local.goalSchedule))
+          m.profileDirty = true;
+      } else if (local.name || local.avatar !== AVATARS[0] || !isDefaultSchedule(local.goalSchedule))
+        m.profileDirty = true;
       m.profilePulled = true;
     }
     if (m.profileDirty) {
@@ -212,7 +258,8 @@ export function useSync(o: Options) {
       if (m.profileSig === sent) m.profileDirty = false;
     } else {
       const remote = await pullProfile(client, uid);
-      if (remote && profileSig(remote) !== profileSig(profileRef.current)) adopt(remote);
+      const merged = remote && withGoal(remote, profileRef.current);
+      if (merged && profileSig(merged) !== profileSig(profileRef.current)) adopt(merged);
     }
     persist();
 
@@ -238,6 +285,15 @@ export function useSync(o: Options) {
     });
     if (differs) setHistory((prev) => ({ ...prev, ...remoteHistory }));
     for (const d of remoteDays) if (!m.historySynced.includes(d)) m.historySynced.push(d);
+    persist();
+
+    // 6b. pull XP (first device to report a day wins)
+    const remoteXp = await pullXp(client, uid);
+    const xpDays = Object.keys(remoteXp);
+    if (xpDays.some((d) => xpRef.current[d] !== remoteXp[d])) {
+      setXpLedger((prev) => ({ ...prev, ...remoteXp }));
+    }
+    for (const d of xpDays) if (!m.xpSynced.includes(d)) m.xpSynced.push(d);
     persist();
 
     // 7. line this device's local notifications up with what changed
@@ -278,7 +334,7 @@ export function useSync(o: Options) {
     } catch (e) {
       console.log("Could not update local notifications after sync", e);
     }
-  }, [setTasks, setHistory, setProfile]);
+  }, [setTasks, setHistory, setXpLedger, setProfile]);
 
   const syncNow = useCallback(async (): Promise<void> => {
     const uid = userIdRef.current;
@@ -366,6 +422,15 @@ export function useSync(o: Options) {
       scheduleSync();
     }
   }, [history, accountReady, scheduleSync]);
+
+  useEffect(() => {
+    if (!accountReady) return;
+    const m = metaRef.current;
+    if (Object.keys(xpLedger).some((d) => xpLedger[d] > 0 && !m.xpSynced.includes(d))) {
+      countPending();
+      scheduleSync();
+    }
+  }, [xpLedger, accountReady, scheduleSync]);
 
   // ---- when to sync
   useEffect(() => {

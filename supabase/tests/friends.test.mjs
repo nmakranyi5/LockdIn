@@ -27,7 +27,9 @@ await db.exec(sql('20260101000000_init.sql'));
 await db.exec(sql('20260101000100_grants.sql'));
 await db.exec(sql('20260101000200_friends.sql').replace('create extension if not exists pg_net;', ''));
 await db.exec(sql('20260101000300_signup_username.sql'));
-console.log('ok   all four migrations apply cleanly');
+await db.exec(sql('20260101000400_xp.sql'));
+await db.exec(sql('20260101000500_goals.sql'));
+console.log('ok   all six migrations apply cleanly');
 
 let n = 0;
 const ok = (name, cond, extra) => { assert.ok(cond, name + (extra ? ' :: ' + extra : '')); console.log('ok  ', name); };
@@ -234,6 +236,31 @@ await as(C, () => db.query(`select public.unregister_push_token('ExponentPushTok
 ok('you cannot unregister someone else\'s device', (await db.query(`select count(*)::int c from public.push_tokens where token='ExponentPushToken[shared-phone]'`)).rows[0].c === 1);
 await as(D, () => db.query(`select public.unregister_push_token('ExponentPushToken[shared-phone]')`));
 ok('unregistering your own works', (await db.query(`select count(*)::int c from public.push_tokens where token='ExponentPushToken[shared-phone]'`)).rows[0].c === 0);
+
+// ---------------------------------------------------------------- daily goals
+ok('profiles start with the "all tasks" goal schedule', (await db.query(`select goal_schedule gs from public.profiles where id='${A}'`)).rows[0].gs[0].goal === 0);
+await as(A, () => db.exec(`update public.profiles set goal_schedule = '[{"from":"0000-01-01","goal":0},{"from":"2026-10-01","goal":3}]' where id='${A}'`));
+ok('an owner can set their goal schedule', (await db.query(`select jsonb_array_length(goal_schedule) n from public.profiles where id='${A}'`)).rows[0].n === 2);
+await fails('the schedule must be a JSON array', as(A, () => db.exec(`update public.profiles set goal_schedule = '{"goal":3}' where id='${A}'`)));
+await fails('...and not empty', as(A, () => db.exec(`update public.profiles set goal_schedule = '[]' where id='${A}'`)));
+ok('a friend cannot change someone else\'s goal', (await as(B, () => db.query(`update public.profiles set goal_schedule = '[{"from":"0000-01-01","goal":9}]' where id='${A}' returning id`))).rows.length === 0);
+const complete = async (t, d, g) => (await db.query(`select public.day_complete(${t}, ${d}, ${g}) c`)).rows[0].c;
+ok('day_complete: "all tasks" needs every task done', [await complete(3, 3, 0), await complete(3, 2, 0), await complete(0, 0, 0)].join() === 'true,false,false');
+ok('day_complete: a goal needs that many done, whatever else is scheduled', [await complete(5, 3, 3), await complete(5, 2, 3), await complete(1, 1, 3)].join() === 'true,false,false');
+await fails('a history goal is bounded', as(A, () => db.exec(`insert into public.day_history (day, total, done, goal) values (current_date - 50, 3, 3, 11)`)));
+await db.exec(`delete from public.day_history`);
+const hg = async (uid, off, total, done, goal) => db.exec(`insert into public.day_history (user_id, day, total, done, goal) values ('${uid}', current_date - ${off}, ${total}, ${done}, ${goal}) on conflict do nothing`);
+// Alex (A) uses a goal of 3, Bella (B) needs every task: both "complete" 3 days
+for (const o of [1, 2, 3]) { await hg(A, o, 5, 3, 3); await hg(B, o, 2, 2, 0); }
+await db.exec(`update public.streak_stats set today='pending' where user_id in ('${A}','${B}')`);
+ok('shared streak counts a goal-met day for one person and an all-tasks day for the other', (await db.query(`select public.shared_streak('${A}','${B}', current_date) s`)).rows[0].s === 3);
+await db.exec(`update public.day_history set done = 2 where user_id='${A}' and day = current_date - 2`);
+ok('...and ends at a day where the goal was missed (2 of 3)', (await db.query(`select public.shared_streak('${A}','${B}', current_date) s`)).rows[0].s === 1);
+await db.exec(`update public.day_history set done = 3 where user_id='${A}' and day = current_date - 2`);
+await db.exec(`update public.day_history set done = 1 where user_id='${B}' and day = current_date - 1`);
+ok('...or where the other person missed theirs', (await db.query(`select public.shared_streak('${A}','${B}', current_date) s`)).rows[0].s === 0);
+await fails('day_complete is not callable by clients', as(A, () => db.query(`select public.day_complete(1,1,1)`)));
+await db.exec(`delete from public.day_history`);
 
 // ---------------------------------------------------------------- request cap
 const spammer = await user('spam@x.com'); await rpc(spammer, `public.set_username('spammer')`);

@@ -90,7 +90,7 @@ export function mergeLocalOnly(remote: Task, local?: Task): Task {
   return merged;
 }
 
-export type HistoryRow = { day: string; total: number; done: number };
+export type HistoryRow = { day: string; total: number; done: number; goal?: number };
 
 export const historyToRows = (h: History, days: string[]): HistoryRow[] =>
   days.filter((d) => h[d]).map((day) => ({ day, ...h[day] }));

@@ -15,20 +15,25 @@ import { colors, radius } from "../assets/colors/colors";
 import AuthScreen from "../components/auth/AuthScreen";
 import { useAuth } from "../components/auth/AuthProvider";
 import CheckInModal from "../components/CheckInModal";
+import CompleteConfirmModal from "../components/CompleteConfirmModal";
+import CompletionModal, { CompletionData } from "../components/CompletionModal";
 import DayStrip from "../components/DayStrip";
 import { setNudgesEnabled } from "../components/friends/api";
 import FriendsModal from "../components/friends/FriendsModal";
 import { useFriends, usePublishStreak } from "../components/friends/useFriends";
 import { usePush } from "../components/friends/usePush";
+import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
+import { dayKey } from "../components/streak";
+import { pendingGoal } from "../components/goals";
+import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../components/xp";
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
 import {
   cancelTaskNotifications,
   scheduleCheckInNotifications,
-  scheduleDeadlineNotification,
   scheduleTaskNotifications,
 } from "../components/scheduleTask";
 import TaskCard from "../components/TaskCard";
@@ -41,7 +46,9 @@ import {
   humanDuration,
   isCheckInDue,
   isEarlyFinish,
+  isMissedTask,
   isSameDay,
+  kindOf,
   newId,
   nextOccurrence,
   priorityOf,
@@ -105,8 +112,14 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [endId, setEndId] = useState<string | null>(null);
+  // A task the person has said they finished, awaiting confirmation. `itemId`
+  // is the checklist item whose tick would complete the whole list.
+  const [finishing, setFinishing] = useState<{ id: string; itemId?: string } | null>(null);
+  // Confirmed: waiting for the update to land so we can show what was earned.
+  const [pending, setPending] = useState<{ id: string; title: string; before: XpSummary } | null>(null);
+  const [completion, setCompletion] = useState<CompletionData | null>(null);
   const spawning = useRef(new Set<string>());
 
   const TASKS_KEY = "@lockdin_tasks";
@@ -181,20 +194,26 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   };
 
   const onEdit = (id: string) => {
+    // Finished and missed tasks are part of the record: they can't be opened or changed.
+    const task = findTask(id);
+    if (!task || task.completedAt || isMissedTask(task, Date.now())) return;
     setEditingId(id);
     setIsModalVisible(true);
   };
 
   const onDelete = (id: string, scope: "one" | "all" = "one") => {
     const task = findTask(id);
-    if (!task) return;
+    // Finished tasks stay: they earned XP and are part of the history.
+    if (!task || task.completedAt) return;
 
     if (scope === "all") {
       const key = seriesKey(task);
       tasks
-        .filter((t) => seriesKey(t) === key)
+        .filter((t) => seriesKey(t) === key && !t.completedAt)
         .forEach((t) => cancelTaskNotifications(t));
-      setTasks((prev) => prev.filter((t) => seriesKey(t) !== key));
+      setTasks((prev) =>
+        prev.filter((t) => seriesKey(t) !== key || !!t.completedAt),
+      );
       return;
     }
 
@@ -207,9 +226,22 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     }
   };
 
+  // Tasks belong to their day: ones planned for a later day can't be worked on
+  // yet, and ones from a day that has passed (missed) can't be worked on any more.
+  const isLockedTask = (task: Task) =>
+    dayKey(new Date(task.startDate)) > todayKey || isMissedTask(task, Date.now());
+
+  // Missed tasks stay on their day untouched; this opens a copy for a new slot.
+  const onReschedule = (id: string) => {
+    if (!findTask(id)) return;
+    setEditingId(null);
+    setRescheduleId(id);
+    setIsModalVisible(true);
+  };
+
   const onStartTask = (id: string) => {
     const task = findTask(id);
-    if (!task || task.startedAt) return;
+    if (!task || task.startedAt || isLockedTask(task)) return;
     cancelTaskNotifications(task, "start", "reminders");
     const startedAt = Date.now();
     updateTask(id, { startedAt });
@@ -222,7 +254,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
     const task = findTask(id);
-    if (!task || task.completedAt) return;
+    if (!task || task.completedAt || isLockedTask(task)) return;
     // Cancel everything, including a start alert that hasn't fired yet.
     cancelTaskNotifications(task);
     updateTask(id, {
@@ -234,20 +266,23 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const toggleItem = (id: string, itemId: string) => {
     const task = findTask(id);
-    if (!task) return;
+    if (!task || task.completedAt || isLockedTask(task)) return;
+    const completesList =
+      !task.completedAt &&
+      (task.items ?? []).every((i) => (i.id === itemId ? !i.done : i.done)) &&
+      (task.items ?? []).some((i) => i.id === itemId && !i.done);
+    if (completesList) {
+      // Don't tick it yet: confirm first, and tick it only if they say yes.
+      setFinishing({ id, itemId });
+      return;
+    }
     const items = (task.items ?? []).map((i) =>
       i.id === itemId ? { ...i, done: !i.done } : i
     );
     if (items.length > 0 && items.every((i) => i.done)) {
       completeTask(id, { items });
     } else {
-      // Unticking an item reopens a completed checklist.
-      updateTask(id, { items, ...(task.completedAt ? { completedAt: null } : {}) });
-      if (task.completedAt) {
-        scheduleDeadlineNotification(task).then((deadlineNotificationId) =>
-          updateTask(id, { deadlineNotificationId })
-        );
-      }
+      updateTask(id, { items });
     }
   };
 
@@ -376,7 +411,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const deleteTask = findTask(deleteId);
   const deleteIsRepeating = !!deleteTask && repeatOf(deleteTask) !== "none";
   const deleteSeriesCount = deleteTask
-    ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
+    ? tasks.filter(
+        (t) => seriesKey(t) === seriesKey(deleteTask) && !t.completedAt,
+      ).length
     : 0;
 
   const {
@@ -384,7 +421,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setProfile,
     history,
     setHistory,
+    xpLedger,
+    setXpLedger,
     stats,
+    xp,
+    goalFor,
+    changeGoal,
     todayKey,
     loaded: profileLoaded,
   } = useProfile(tasks, loaded, now);
@@ -398,6 +440,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     setProfile,
     history,
     setHistory,
+    xpLedger,
+    setXpLedger,
   });
 
   const social = auth.configured && !!userId;
@@ -448,8 +492,15 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         }
       : undefined;
 
-  const endTask = findTask(endId);
-  const endsEarly = !!endTask && isEarlyFinish(endTask, now);
+  const finishTask = findTask(finishing?.id ?? null);
+  const finishKind = finishTask ? kindOf(finishTask) : null;
+  const finishesEarly = !!finishTask && finishKind === "timer" && isEarlyFinish(finishTask, now);
+  const finishXp = finishTask ? xp.gainIfCompleted(finishTask) : 0;
+  // Late work earns less; warn before they confirm, using the moment they would finish.
+  const finishLate = finishTask ? lateness(finishTask, now) : undefined;
+  const finishGoal = finishTask ? xp.goalOutcome(finishTask) : { reaches: false, bonus: 1 };
+  const finishReachesGoal = finishGoal.reaches;
+  const finishGoalBonus = finishGoal.bonus;
 
   const anyModalOpen =
     isModalVisible ||
@@ -458,11 +509,84 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     isProfileVisible ||
     isFriendsVisible ||
     deleteId !== null ||
-    endId !== null;
+    finishing !== null ||
+    pending !== null ||
+    completion !== null;
+  // Level-up celebration: only once progress has loaded, and after the first
+  // sync when signed in so older progress isn't mistaken for a new level.
+  const levelUp = useLevelUp(
+    xp.level,
+    userId,
+    profileLoaded && (!social || sync.lastSyncedAt !== null)
+  );
+  const todayGoal = goalFor(todayKey);
+  const todayTasks = tasks.filter((t) => dayKey(new Date(t.startDate)) === todayKey);
+  const goalProgress = {
+    current: todayGoal,
+    pending: pendingGoal(profile.goalSchedule, todayKey)?.goal ?? null,
+    doneToday: todayTasks.filter((t) => !!t.completedAt).length,
+    totalToday: todayTasks.length,
+  };
+  const selectedKey = dayKey(selectedDay);
+  const selectedGoal = goalFor(selectedKey);
+  const dayXpInfo = xp.forDay(selectedKey);
+  // A finished day's XP is frozen: show what it actually earned.
+  const dayClosed = xp.isClosed(selectedKey);
+  const dayEarned = dayClosed ? xpLedger[selectedKey] ?? 0 : dayXpInfo.total;
+
   // Only one prompt at a time, and never stacked on top of another dialog.
   const checkInTask = anyModalOpen
     ? undefined
     : tasks.find((t) => isCheckInDue(t, now));
+
+  // Once a confirmed completion has landed, work out what it earned.
+  useEffect(() => {
+    if (!pending) return;
+    const task = tasks.find((t) => t.id === pending.id);
+    if (!task?.completedAt) {
+      // Never leave the app stuck waiting (e.g. if the task was deleted).
+      const giveUp = setTimeout(() => setPending(null), 4000);
+      return () => clearTimeout(giveUp);
+    }
+    const key = dayKey(new Date(task.startDate));
+    const day = xp.forDay(key);
+    const gained = Math.max(0, xp.total - pending.before.total);
+    const closed = xp.isClosed(key);
+    const late = lateness(task);
+    const note =
+      gained > 0
+        ? undefined
+        : closed
+        ? "That day has already been counted, so this one earns no XP."
+        : day.perTask.size >= DAILY_TASK_CAP && !day.perTask.has(task.id)
+        ? `Your ${DAILY_TASK_CAP} best tasks of the day already count. Nice work anyway!`
+        : "No XP for this one.";
+    const before = levelFromXp(pending.before.total);
+    const after = levelFromXp(xp.total);
+    if (after.level > before.level) levelUp.markSeen(after.level);
+    setCompletion({
+      title: pending.title,
+      gained,
+      basePoints: BASE_XP[priorityOf(task)],
+      multiplier: day.multiplier,
+      note,
+      before,
+      after,
+      streakMultiplier: day.streakMultiplier,
+      goalBonus: day.goalBonus,
+      lateStart: late.start,
+      lateFinish: late.finish,
+      // Reaching a numbered goal is a moment of its own; with "all tasks" it
+      // is simply finishing the last task of the day (`dayDone`).
+      goalReached: todayGoal !== 0 && day.goalMet && !pending.before.forDay(key).goalMet,
+      dayDone:
+        todayGoal === 0 &&
+        stats.today === "complete" &&
+        isSameDay(new Date(task.startDate), new Date()),
+      streak: stats.current,
+    });
+    setPending(null);
+  }, [pending, tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = startOfDay(new Date(now));
   const isPast = selectedDay.getTime() < today.getTime();
@@ -508,11 +632,19 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       year: selectedDay.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
     });
     if (dayTasks.length === 0) return date;
-    return `${date} · ${doneCount}/${dayTasks.length} done`;
+    const earned = dayEarned > 0 ? ` · +${dayEarned} XP` : "";
+    const progress =
+      selectedGoal > 0
+        ? doneCount >= selectedGoal
+          ? "goal reached"
+          : `${doneCount}/${selectedGoal} toward goal`
+        : `${doneCount}/${dayTasks.length} done`;
+    return `${date} · ${progress}${earned}`;
   };
 
   const openAdd = () => {
     setEditingId(null);
+    setRescheduleId(null);
     setIsModalVisible(true);
   };
 
@@ -534,8 +666,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           onPress={() => setSelectedDay((d) => addDays(d, -1))}
         />
         <View style={styles.dayTitleWrap}>
-          <Text style={styles.dayTitle}>{dayTitle()}</Text>
-          <Text style={styles.daySub}>{daySubtitle()}</Text>
+          <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
+            {dayTitle()}
+          </Text>
+          <Text style={styles.daySub} numberOfLines={2}>
+            {daySubtitle()}
+          </Text>
         </View>
         <IconButton
           name="chevron-forward"
@@ -602,9 +738,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
             <View style={styles.banner}>
               <Ionicons name="flame" size={22} color={colors.streak} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>All done for today</Text>
+                <Text style={styles.bannerTitle}>
+                  {todayGoal > 0 ? "Daily goal reached" : "All done for today"}
+                </Text>
                 <Text style={styles.bannerSub}>
-                  {stats.current} day{stats.current === 1 ? "" : "s"} streak
+                  {stats.current} day{stats.current === 1 ? "" : "s"} streak · +{xp.today.xp} XP
+                  {xp.today.multiplier > 1 ? ` (×${xp.today.multiplier.toFixed(2)})` : ""}
                 </Text>
               </View>
             </View>
@@ -632,11 +771,13 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               now={now}
               onPress={() => onEdit(task.id)}
               onStart={() => onStartTask(task.id)}
-              onEnd={() => setEndId(task.id)}
-              onDone={() => completeTask(task.id)}
+              onEnd={() => setFinishing({ id: task.id })}
+              onDone={() => setFinishing({ id: task.id })}
               onToggleItem={(itemId) => toggleItem(task.id, itemId)}
-              onReschedule={() => onEdit(task.id)}
+              locked={isLockedTask(task)}
               onDelete={() => setDeleteId(task.id)}
+              onReschedule={() => onReschedule(task.id)}
+              xp={dayClosed ? undefined : dayXpInfo.perTask.get(task.id)}
             />
           ))
         )}
@@ -677,10 +818,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           setIsModalVisible(false);
           setTimeout(() => {
             setEditingId(null);
+            setRescheduleId(null);
           }, 0);
         }}
         initialTask={findTask(editingId) ?? null}
-        defaultDate={selectedDay}
+        rescheduleOf={findTask(rescheduleId) ?? null}
+        defaultDate={rescheduleId ? new Date() : selectedDay}
         onSave={handleSaveTask}
       />
 
@@ -711,26 +854,62 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         }}
       />
 
-      <ConfirmModal
-        visible={endId !== null}
-        title={endsEarly ? "Finished early?" : "End Task?"}
+      <CompleteConfirmModal
+        visible={finishing !== null}
+        title={
+          finishesEarly
+            ? "Finished early?"
+            : finishKind === "timer"
+            ? "End Task?"
+            : finishKind === "checklist"
+            ? "Complete checklist?"
+            : "Mark as done?"
+        }
         message={
-          endsEarly && endTask?.startedAt && endTask.estimateMinutes
+          finishesEarly && finishTask?.startedAt && finishTask.estimateMinutes
             ? `You've worked ${humanDuration(
-                now - endTask.startedAt
+                now - finishTask.startedAt
               )} of your ${humanDuration(
-                endTask.estimateMinutes * 60_000
+                finishTask.estimateMinutes * 60_000
               )} estimate. Did you really finish the task?`
+            : finishKind === "checklist"
+            ? "Every item is ticked. Is the whole list really done?"
             : "Are you sure that the task is done? Be honest. 🙏"
         }
-        confirmText={endsEarly ? "Yes, it's done" : "End Task"}
-        cancelText={endsEarly ? "Not yet" : "Cancel"}
-        confirmVariant={endsEarly ? "primary" : "danger"}
-        onCancel={() => setEndId(null)}
+        confirmText={
+          finishesEarly || finishKind !== "timer"
+            ? finishKind === "checklist"
+              ? "Yes, complete it"
+              : "Yes, it's done"
+            : "End Task"
+        }
+        cancelText={finishesEarly || finishKind !== "timer" ? "Not yet" : "Cancel"}
+        xp={finishXp}
+        goalBonus={finishReachesGoal ? finishGoalBonus : undefined}
+        late={finishLate}
+        onCancel={() => setFinishing(null)}
         onConfirm={() => {
-          if (endId !== null) completeTask(endId);
-          setEndId(null);
+          const f = finishing;
+          if (!f || !finishTask) return setFinishing(null);
+          setPending({ id: finishTask.id, title: finishTask.title, before: xp });
+          if (f.itemId) {
+            // Tick the item that finishes the list, together with completing it.
+            const items = (finishTask.items ?? []).map((i) =>
+              i.id === f.itemId ? { ...i, done: true } : i
+            );
+            completeTask(finishTask.id, { items });
+          } else {
+            completeTask(finishTask.id);
+          }
+          setFinishing(null);
         }}
+      />
+
+      <CompletionModal data={completion} onClose={() => setCompletion(null)} />
+
+      <LevelUpModal
+        level={anyModalOpen || checkInTask ? null : levelUp.celebrate}
+        onClose={levelUp.dismiss}
       />
 
       <CheckInModal
@@ -743,7 +922,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
             });
         }}
         onDone={() => {
-          if (checkInTask) completeTask(checkInTask.id);
+          if (checkInTask) setFinishing({ id: checkInTask.id });
         }}
       />
 
@@ -780,7 +959,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         profile={profile}
         onChange={setProfile}
         stats={stats}
+        xp={xp}
         todayKey={todayKey}
+        goal={goalProgress}
+        onChangeGoal={changeGoal}
       />
 
       </View>
@@ -842,14 +1024,16 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 16,
   },
-  dayTitleWrap: { alignItems: "center" },
+  // Takes whatever room the arrows leave, so a longer subtitle wraps instead of
+  // pushing the buttons off-screen.
+  dayTitleWrap: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 8 },
   dayTitle: {
     fontSize: 34,
     fontWeight: "800",
     letterSpacing: -1,
     color: colors.textPrimary,
   },
-  daySub: { fontSize: 14, color: colors.textMuted, marginTop: 2 },
+  daySub: { fontSize: 14, color: colors.textMuted, marginTop: 2, textAlign: "center" },
   jump: {
     alignSelf: "center",
     flexDirection: "row",

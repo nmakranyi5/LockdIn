@@ -52,6 +52,8 @@ export type TaskState = {
   isOverdue: boolean;
   isOvertime: boolean;
   isDone: boolean;
+  // Not finished, and its day is over: it stays on that day as a record.
+  isMissed: boolean;
   progress: number | null;
   status: { text: string; color: string; bg: string };
 };
@@ -83,6 +85,16 @@ export const formatMs = (ms: number) => {
 export const formatClock = (d: Date) =>
   new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
+// A task from an earlier day that was never finished and is past its deadline.
+export function isMissedTask(task: Task, nowMs: number): boolean {
+  if (task.completedAt) return false;
+  const startDay = new Date(task.startDate);
+  startDay.setHours(0, 0, 0, 0);
+  const today = new Date(nowMs);
+  today.setHours(0, 0, 0, 0);
+  return startDay.getTime() < today.getTime() && nowMs >= new Date(task.endDate).getTime();
+}
+
 export function getTaskState(task: Task, nowMs: number): TaskState {
   const kind = kindOf(task);
   const startMs = new Date(task.startDate).setSeconds(0, 0);
@@ -96,6 +108,7 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
   let isOverdue = false;
   let isOvertime = false;
   let isDone = false;
+  let isMissed = false;
   let status = {
     text: "Upcoming",
     color: colors.accent,
@@ -112,6 +125,12 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
       label = "Completed at";
       valueText = formatClock(new Date(task.completedAt));
     }
+  } else if (isMissedTask(task, nowMs)) {
+    isMissed = true;
+    isOverdue = true;
+    label = "Deadline was";
+    valueText = formatClock(new Date(task.endDate));
+    status = { text: "Missed", color: colors.danger, bg: colors.dangerSoft };
   } else if (kind === "timer" && task.startedAt && task.estimateMinutes) {
     // Running against an estimate: count it down, then count the overtime up.
     const estimateMs = task.estimateMinutes * 60_000;
@@ -170,6 +189,7 @@ export function getTaskState(task: Task, nowMs: number): TaskState {
     isOverdue,
     isOvertime,
     isDone,
+    isMissed,
     progress,
     status,
   };

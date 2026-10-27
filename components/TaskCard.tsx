@@ -21,8 +21,13 @@ type TaskCardProps = {
   onEnd: () => void;
   onDone: () => void;
   onToggleItem: (itemId: string) => void;
-  onReschedule: () => void;
   onDelete: () => void;
+  // Copies a missed task onto the current or a later day; the original stays as it was.
+  onReschedule: () => void;
+  // XP this task earned (shown once it is completed).
+  xp?: number;
+  // A task for a later day: it can be planned but not worked on or finished yet.
+  locked?: boolean;
 };
 
 export default function TaskCard({
@@ -33,8 +38,10 @@ export default function TaskCard({
   onEnd,
   onDone,
   onToggleItem,
-  onReschedule,
   onDelete,
+  onReschedule,
+  xp,
+  locked,
 }: TaskCardProps) {
   const s = getTaskState(task, now);
   const kind = kindOf(task);
@@ -52,6 +59,7 @@ export default function TaskCard({
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
+      disabled={completed || s.isMissed}
       style={[styles.card, s.isDone && styles.cardDone]}
     >
       {showAccent && (
@@ -69,14 +77,16 @@ export default function TaskCard({
               {s.status.text}
             </Text>
           </View>
-          <TouchableOpacity
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Delete task"
-            onPress={onDelete}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          {!s.isDone && (
+            <TouchableOpacity
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Delete task"
+              onPress={onDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -102,6 +112,7 @@ export default function TaskCard({
             text={`Est. ${humanDuration(task.estimateMinutes * 60_000)}`}
           />
         )}
+        {completed && !!xp && <Tag icon="star" text={`+${xp} XP`} color={colors.warning} />}
         {priority !== "normal" && (
           <Tag icon={pMeta.icon} text={pMeta.label} color={pMeta.color} />
         )}
@@ -114,6 +125,7 @@ export default function TaskCard({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.7}
+              disabled={completed || locked || s.isMissed}
               style={styles.itemRow}
               onPress={() => onToggleItem(item.id)}
             >
@@ -147,16 +159,16 @@ export default function TaskCard({
           </Text>
         </View>
 
-        {kind === "timer" && !started && !completed && (
+        {!locked && !s.isMissed && kind === "timer" && !started && !completed && (
           <ActionButton label="Start" icon="play" bg={colors.accent} onPress={onStart} />
         )}
-        {kind === "timer" && started && !completed && (
+        {!locked && !s.isMissed && kind === "timer" && started && !completed && (
           <ActionButton label="End" icon="stop" bg={colors.danger} onPress={onEnd} />
         )}
-        {kind === "oneshot" && !completed && (
+        {!locked && !s.isMissed && kind === "oneshot" && !completed && (
           <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
         )}
-        {completed && (
+        {s.isMissed && (
           <ActionButton
             label="Reschedule"
             icon="refresh"

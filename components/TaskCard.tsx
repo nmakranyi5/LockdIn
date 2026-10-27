@@ -22,6 +22,8 @@ type TaskCardProps = {
   onDone: () => void;
   onToggleItem: (itemId: string) => void;
   onDelete: () => void;
+  // Copies a missed task onto the current or a later day; the original stays as it was.
+  onReschedule: () => void;
   // XP this task earned (shown once it is completed).
   xp?: number;
   // A task for a later day: it can be planned but not worked on or finished yet.
@@ -37,6 +39,7 @@ export default function TaskCard({
   onDone,
   onToggleItem,
   onDelete,
+  onReschedule,
   xp,
   locked,
 }: TaskCardProps) {
@@ -56,7 +59,7 @@ export default function TaskCard({
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
-      disabled={completed}
+      disabled={completed || s.isMissed}
       style={[styles.card, s.isDone && styles.cardDone]}
     >
       {showAccent && (
@@ -122,7 +125,7 @@ export default function TaskCard({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.7}
-              disabled={completed || locked}
+              disabled={completed || locked || s.isMissed}
               style={styles.itemRow}
               onPress={() => onToggleItem(item.id)}
             >
@@ -156,14 +159,23 @@ export default function TaskCard({
           </Text>
         </View>
 
-        {!locked && kind === "timer" && !started && !completed && (
+        {!locked && !s.isMissed && kind === "timer" && !started && !completed && (
           <ActionButton label="Start" icon="play" bg={colors.accent} onPress={onStart} />
         )}
-        {!locked && kind === "timer" && started && !completed && (
+        {!locked && !s.isMissed && kind === "timer" && started && !completed && (
           <ActionButton label="End" icon="stop" bg={colors.danger} onPress={onEnd} />
         )}
-        {!locked && kind === "oneshot" && !completed && (
+        {!locked && !s.isMissed && kind === "oneshot" && !completed && (
           <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
+        )}
+        {s.isMissed && (
+          <ActionButton
+            label="Reschedule"
+            icon="refresh"
+            bg={colors.surfaceRaised}
+            fg={colors.textLabel}
+            onPress={onReschedule}
+          />
         )}
       </View>
 

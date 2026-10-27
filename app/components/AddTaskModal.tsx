@@ -52,6 +52,8 @@ type AddTaskModalProps = {
   onClose: () => void;
   onSave: (taskData: any) => void;
   initialTask?: any | null;
+  // A missed task being copied onto a new day: opens as a new task prefilled from it.
+  rescheduleOf?: any | null;
   defaultDate?: Date;
 };
 
@@ -60,6 +62,7 @@ export default function AddTaskModal({
   onClose,
   onSave,
   initialTask,
+  rescheduleOf,
   defaultDate,
 }: AddTaskModalProps) {
   const [title, setTitle] = useState("");
@@ -90,7 +93,7 @@ export default function AddTaskModal({
     setEstimateError(false);
     lastDuration.current = 60 * 60_000;
 
-    const est: number | undefined = initialTask?.estimateMinutes;
+    const est: number | undefined = (initialTask ?? rescheduleOf)?.estimateMinutes;
     if (!est) {
       setEstimateKey("none");
       setCustomMinutes("");
@@ -136,6 +139,28 @@ export default function AddTaskModal({
     }
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
+
+    if (rescheduleOf) {
+      // Same task, new slot: keep its length, start its checklist over.
+      const length = Math.max(
+        60_000,
+        new Date(rescheduleOf.endDate).getTime() - new Date(rescheduleOf.startDate).getTime()
+      );
+      const until = new Date(start.getTime() + length);
+      lastDuration.current = length;
+      setKind(kindOf(rescheduleOf));
+      setPriority(priorityOf(rescheduleOf));
+      setRepeats("none");
+      setItems(
+        (rescheduleOf.items ?? []).map((i: ChecklistItem) => ({ ...i, done: false }))
+      );
+      setTitle(rescheduleOf.title ?? "");
+      setStartDate(start);
+      setStartTime(start);
+      setEndDate(until);
+      setEndTime(until);
+      return;
+    }
 
     setKind("timer");
     setPriority("normal");
@@ -425,7 +450,7 @@ export default function AddTaskModal({
   return (
     <ModalCard
       visible={isVisible}
-      title={initialTask ? "Edit Task" : "Add Task"}
+      title={initialTask ? "Edit Task" : rescheduleOf ? "Reschedule Task" : "Add Task"}
       headerRight={
         <View style={styles.headerActions}>
           <IconButton

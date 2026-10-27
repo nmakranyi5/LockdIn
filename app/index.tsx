@@ -46,6 +46,7 @@ import {
   humanDuration,
   isCheckInDue,
   isEarlyFinish,
+  isMissedTask,
   isSameDay,
   kindOf,
   newId,
@@ -111,6 +112,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // A task the person has said they finished, awaiting confirmation. `itemId`
   // is the checklist item whose tick would complete the whole list.
@@ -192,8 +194,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   };
 
   const onEdit = (id: string) => {
-    // A finished task is part of the record: it can't be opened or changed.
-    if (findTask(id)?.completedAt) return;
+    // Finished and missed tasks are part of the record: they can't be opened or changed.
+    const task = findTask(id);
+    if (!task || task.completedAt || isMissedTask(task, Date.now())) return;
     setEditingId(id);
     setIsModalVisible(true);
   };
@@ -223,12 +226,22 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     }
   };
 
-  // Tasks belong to their day: ones planned for a later day can't be worked on yet.
-  const isFuture = (task: Task) => dayKey(new Date(task.startDate)) > todayKey;
+  // Tasks belong to their day: ones planned for a later day can't be worked on
+  // yet, and ones from a day that has passed (missed) can't be worked on any more.
+  const isLockedTask = (task: Task) =>
+    dayKey(new Date(task.startDate)) > todayKey || isMissedTask(task, Date.now());
+
+  // Missed tasks stay on their day untouched; this opens a copy for a new slot.
+  const onReschedule = (id: string) => {
+    if (!findTask(id)) return;
+    setEditingId(null);
+    setRescheduleId(id);
+    setIsModalVisible(true);
+  };
 
   const onStartTask = (id: string) => {
     const task = findTask(id);
-    if (!task || task.startedAt || isFuture(task)) return;
+    if (!task || task.startedAt || isLockedTask(task)) return;
     cancelTaskNotifications(task, "start", "reminders");
     const startedAt = Date.now();
     updateTask(id, { startedAt });
@@ -241,7 +254,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
     const task = findTask(id);
-    if (!task || task.completedAt || isFuture(task)) return;
+    if (!task || task.completedAt || isLockedTask(task)) return;
     // Cancel everything, including a start alert that hasn't fired yet.
     cancelTaskNotifications(task);
     updateTask(id, {
@@ -253,7 +266,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const toggleItem = (id: string, itemId: string) => {
     const task = findTask(id);
-    if (!task || task.completedAt || isFuture(task)) return;
+    if (!task || task.completedAt || isLockedTask(task)) return;
     const completesList =
       !task.completedAt &&
       (task.items ?? []).every((i) => (i.id === itemId ? !i.done : i.done)) &&
@@ -627,6 +640,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const openAdd = () => {
     setEditingId(null);
+    setRescheduleId(null);
     setIsModalVisible(true);
   };
 
@@ -756,8 +770,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               onEnd={() => setFinishing({ id: task.id })}
               onDone={() => setFinishing({ id: task.id })}
               onToggleItem={(itemId) => toggleItem(task.id, itemId)}
-              locked={isFuture(task)}
+              locked={isLockedTask(task)}
               onDelete={() => setDeleteId(task.id)}
+              onReschedule={() => onReschedule(task.id)}
               xp={dayClosed ? undefined : dayXpInfo.perTask.get(task.id)}
             />
           ))
@@ -799,10 +814,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           setIsModalVisible(false);
           setTimeout(() => {
             setEditingId(null);
+            setRescheduleId(null);
           }, 0);
         }}
         initialTask={findTask(editingId) ?? null}
-        defaultDate={selectedDay}
+        rescheduleOf={findTask(rescheduleId) ?? null}
+        defaultDate={rescheduleId ? new Date() : selectedDay}
         onSave={handleSaveTask}
       />
 

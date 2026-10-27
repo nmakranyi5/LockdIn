@@ -8,6 +8,11 @@ import Button from "./ui/Button";
 import ModalCard from "./ui/ModalCard";
 import { AVATARS } from "./useProfile";
 
+const COLUMNS = 6;
+const MIN_TILE = 44;
+const MAX_TILE = 52;
+const GAP = 8;
+
 type AvatarModalProps = {
   visible: boolean;
   avatar: string;
@@ -19,6 +24,10 @@ type AvatarModalProps = {
 export default function AvatarModal({ visible, avatar, onSelect, onClose }: AvatarModalProps) {
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  // As many across as keep a comfortable tap size (up to six), never huge.
+  const cols = gridWidth ? Math.max(4, Math.min(COLUMNS, Math.floor((gridWidth + GAP) / (MIN_TILE + GAP)))) : COLUMNS;
+  const tile = gridWidth ? Math.min(MAX_TILE, Math.floor((gridWidth - GAP * (cols - 1)) / cols)) : 48;
 
   const choosePhoto = async () => {
     setPicking(true);
@@ -62,7 +71,7 @@ export default function AvatarModal({ visible, avatar, onSelect, onClose }: Avat
       {error && <Text style={styles.error}>{error}</Text>}
 
       <Text style={styles.label}>Or pick one</Text>
-      <View style={styles.grid}>
+      <View style={styles.grid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
         {AVATARS.map((a) => (
           <TouchableOpacity
             key={a}
@@ -71,9 +80,9 @@ export default function AvatarModal({ visible, avatar, onSelect, onClose }: Avat
             accessibilityLabel={`Avatar ${a}`}
             accessibilityState={{ selected: a === avatar }}
             onPress={() => onSelect(a)}
-            style={[styles.tile, a === avatar && styles.tileActive]}
+            style={[styles.tile, { width: tile, height: tile }, a === avatar && styles.tileActive]}
           >
-            <Text style={styles.tileText}>{a}</Text>
+            <Text style={{ fontSize: Math.round(tile * 0.55) }}>{a}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -114,13 +123,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.textMuted,
   },
-  // Four across; the tiles share the width so they never run off the edge.
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: GAP },
   tile: {
-    width: "22%",
-    flexGrow: 1,
-    aspectRatio: 1,
-    maxWidth: 80,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -129,5 +133,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   tileActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  tileText: { fontSize: 28 },
 });

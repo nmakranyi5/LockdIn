@@ -25,6 +25,7 @@ import { usePush } from "../components/friends/usePush";
 import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
+import CalendarModal from "../components/CalendarModal";
 import { dayKey } from "../components/streak";
 import { pendingGoal } from "../components/goals";
 import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../components/xp";
@@ -112,6 +113,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [loaded, setLoaded] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(new Date()));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // A task the person has said they finished, awaiting confirmation. `itemId`
@@ -665,14 +667,23 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           size={18}
           onPress={() => setSelectedDay((d) => addDays(d, -1))}
         />
-        <View style={styles.dayTitleWrap}>
-          <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
-            {dayTitle()}
-          </Text>
+        <TouchableOpacity
+          style={styles.dayTitleWrap}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Pick a day from the calendar"
+          onPress={() => setCalendarOpen(true)}
+        >
+          <View style={styles.dayTitleRow}>
+            <Text style={styles.dayTitle} numberOfLines={1} adjustsFontSizeToFit>
+              {dayTitle()}
+            </Text>
+            <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
+          </View>
           <Text style={styles.daySub} numberOfLines={2}>
             {daySubtitle()}
           </Text>
-        </View>
+        </TouchableOpacity>
         <IconButton
           name="chevron-forward"
           label="Next day"
@@ -811,6 +822,14 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
           )}
         </View>
       )}
+
+      <CalendarModal
+        visible={calendarOpen}
+        selected={selectedDay}
+        hasTasks={hasTasks}
+        onSelect={(d) => setSelectedDay(startOfDay(d))}
+        onClose={() => setCalendarOpen(false)}
+      />
 
       <AddTaskModal
         isVisible={isModalVisible}
@@ -1026,6 +1045,7 @@ const styles = StyleSheet.create({
   },
   // Takes whatever room the arrows leave, so a longer subtitle wraps instead of
   // pushing the buttons off-screen.
+  dayTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, maxWidth: "100%" },
   dayTitleWrap: { flex: 1, minWidth: 0, alignItems: "center", paddingHorizontal: 8 },
   dayTitle: {
     fontSize: 34,

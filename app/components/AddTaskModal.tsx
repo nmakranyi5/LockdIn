@@ -434,6 +434,18 @@ export default function AddTaskModal({
     onClose();
   };
 
+  // Deadline shortcut: the end of the day the task starts on.
+  const isEndOfDay =
+    endTime.getHours() === 23 &&
+    endTime.getMinutes() === 59 &&
+    endDate.toDateString() === startDate.toDateString();
+  const setEndOfDay = () => {
+    const d = new Date(startDate);
+    d.setHours(23, 59, 0, 0);
+    setEndDate(d);
+    setEndTime(d);
+  };
+
   const startOfToday = () => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -702,6 +714,14 @@ export default function AddTaskModal({
 
       )}
 
+      <View style={styles.eod}>
+        <Chips
+          options={[{ value: "eod", label: "End of day · 11:59 PM", icon: "moon-outline" }]}
+          value={isEndOfDay ? "eod" : ""}
+          onChange={setEndOfDay}
+        />
+      </View>
+
       <Text style={styles.label}>Priority</Text>
       <Chips options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} />
 
@@ -717,6 +737,7 @@ export default function AddTaskModal({
 }
 
 const styles = StyleSheet.create({
+  eod: { marginTop: 10 },
   headerActions: { flexDirection: "row", gap: 8 },
   label: {
     fontSize: 12,

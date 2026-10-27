@@ -753,7 +753,6 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               onEnd={() => setFinishing({ id: task.id })}
               onDone={() => setFinishing({ id: task.id })}
               onToggleItem={(itemId) => toggleItem(task.id, itemId)}
-              onReschedule={() => onEdit(task.id)}
               onDelete={() => setDeleteId(task.id)}
               xp={dayClosed ? undefined : dayXpInfo.perTask.get(task.id)}
             />

@@ -21,7 +21,6 @@ type TaskCardProps = {
   onEnd: () => void;
   onDone: () => void;
   onToggleItem: (itemId: string) => void;
-  onReschedule: () => void;
   onDelete: () => void;
   // XP this task earned (shown once it is completed).
   xp?: number;
@@ -35,7 +34,6 @@ export default function TaskCard({
   onEnd,
   onDone,
   onToggleItem,
-  onReschedule,
   onDelete,
   xp,
 }: TaskCardProps) {
@@ -163,15 +161,6 @@ export default function TaskCard({
         )}
         {kind === "oneshot" && !completed && (
           <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
-        )}
-        {completed && (
-          <ActionButton
-            label="Reschedule"
-            icon="refresh"
-            bg={colors.surfaceRaised}
-            fg={colors.textLabel}
-            onPress={onReschedule}
-          />
         )}
       </View>
 

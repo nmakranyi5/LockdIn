@@ -19,13 +19,13 @@ export default function HelpHomeScreenModal({
     >
       <HelpList
         items={[
-          "With LockdIn, stay on top of your tasks and get things done.",
-          "Use the day strip to switch days. Tap a task to edit it, or the trash to delete.",
-          "You can find this again under Settings → Help (top left).",
-          "Hit the + button to create your first task and get started.",
-          "Finish at least one task in a day to grow your 🔥 streak. Tap your avatar (top right) to see your profile.",
-          "Set a daily goal on your profile: pick at least 1 to 10 tasks in a day, or all of them, and a higher goal earns bonus XP. Finish a task (you will be asked to confirm) to earn XP: more for important and urgent ones, boosted by your streak. Starting a timer late or finishing after the deadline takes 25% off that task's XP. Watch your level fill up on your profile.",
-          "Tap the people button (bottom right) to add friends by username, compare streaks and nudge each other.",
+          "Switch days with the strip. Tap a task to edit it, or the bin to delete it.",
+          "Tap + to add a task. You can plan ahead, but each task can only be done on its own day.",
+          "Finish at least one task a day to grow your 🔥 streak. Set your daily goal on your profile (top right).",
+          "Finishing a task earns XP: more for urgent ones, boosted by your streak and goal. Late starts and finishes cost 25%.",
+          "Missed a task? Tap Reschedule to copy it to another day.",
+          "Tap the people button to add friends and compare streaks.",
+          "Find this again under Settings → Help (top left).",
         ]}
       />
     </ModalCard>

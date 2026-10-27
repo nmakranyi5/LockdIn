@@ -19,11 +19,9 @@ export default function HelpTaskScreenModal({
     >
       <HelpList
         items={[
-          "Here, you can manage a task.",
-          "First, input a name and pick a type: Timer, Checklist, or One & done.",
-          "Next, set the start date and time using the pickers.",
-          "Then, set the deadline date and time with the pickers.",
-          "Set a priority and repeat if you like. Timer tasks can take an estimate: you'll be asked to confirm an early finish, and checked in on if you run over.",
+          "Name your task and pick a type: Timer, Checklist or One & done.",
+          "Set when it starts and its deadline. End of day sets 11:59 PM.",
+          "Optionally set a priority and repeat. A timer estimate asks you to confirm early finishes and checks in if you run over.",
         ]}
       />
     </ModalCard>

@@ -27,7 +27,7 @@ import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import { dayKey } from "../components/streak";
 import { pendingGoal } from "../components/goals";
-import { BASE_XP, DAILY_TASK_CAP, levelFromXp, XpSummary } from "../components/xp";
+import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../components/xp";
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
@@ -496,6 +496,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const finishKind = finishTask ? kindOf(finishTask) : null;
   const finishesEarly = !!finishTask && finishKind === "timer" && isEarlyFinish(finishTask, now);
   const finishXp = finishTask ? xp.gainIfCompleted(finishTask) : 0;
+  // Late work earns less; warn before they confirm, using the moment they would finish.
+  const finishLate = finishTask ? lateness(finishTask, now) : undefined;
   const finishGoal = finishTask ? xp.goalOutcome(finishTask) : { reaches: false, bonus: 1 };
   const finishReachesGoal = finishGoal.reaches;
   const finishGoalBonus = finishGoal.bonus;
@@ -550,6 +552,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     const day = xp.forDay(key);
     const gained = Math.max(0, xp.total - pending.before.total);
     const closed = xp.isClosed(key);
+    const late = lateness(task);
     const note =
       gained > 0
         ? undefined
@@ -571,6 +574,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       after,
       streakMultiplier: day.streakMultiplier,
       goalBonus: day.goalBonus,
+      lateStart: late.start,
+      lateFinish: late.finish,
       // Reaching a numbered goal is a moment of its own; with "all tasks" it
       // is simply finishing the last task of the day (`dayDone`).
       goalReached: todayGoal !== 0 && day.goalMet && !pending.before.forDay(key).goalMet,
@@ -881,6 +886,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         cancelText={finishesEarly || finishKind !== "timer" ? "Not yet" : "Cancel"}
         xp={finishXp}
         goalBonus={finishReachesGoal ? finishGoalBonus : undefined}
+        late={finishLate}
         onCancel={() => setFinishing(null)}
         onConfirm={() => {
           const f = finishing;

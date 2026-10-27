@@ -1,6 +1,6 @@
 import { allTasksBonus, goalBonus } from "./goals";
 import { GoalLookup, History, dayKey, fromKey, isDayComplete, summarize } from "./streak";
-import { addDays, Priority, priorityOf, Task } from "./taskState";
+import { addDays, kindOf, Priority, priorityOf, Task } from "./taskState";
 
 // ---------------------------------------------------------------------------
 // Earning XP
@@ -23,8 +23,31 @@ export const MAX_STREAK_BONUS_DAYS = 20;
 export const streakMultiplier = (streak: number) =>
   1 + STREAK_BONUS_PER_DAY * Math.min(Math.max(0, streak), MAX_STREAK_BONUS_DAYS);
 
+// Late work earns less: a timer started after its start time, and any task
+// finished after its deadline, each take 25% off that task's XP.
+export const LATE_PENALTY = 0.25;
+export const LATE_START_GRACE_MS = 5 * 60_000;
+export const LATE_FINISH_GRACE_MS = 60_000;
+
+export function lateness(task: Task, completedAt: number | null | undefined = task.completedAt) {
+  const start = new Date(task.startDate).getTime();
+  const end = new Date(task.endDate).getTime();
+  return {
+    // Only timers are started on purpose; other tasks just get finished.
+    start:
+      kindOf(task) === "timer" && !!task.startedAt && task.startedAt > start + LATE_START_GRACE_MS,
+    finish: !!completedAt && completedAt > end + LATE_FINISH_GRACE_MS,
+  };
+}
+
+// 1 on time, 0.75 with one lateness, 0.5 with both.
+export function lateFactor(task: Task, completedAt: number | null | undefined = task.completedAt) {
+  const l = lateness(task, completedAt);
+  return 1 - LATE_PENALTY * (Number(l.start) + Number(l.finish));
+}
+
 export const taskXp = (task: Task, multiplier: number) =>
-  Math.round(BASE_XP[priorityOf(task)] * multiplier);
+  Math.round(BASE_XP[priorityOf(task)] * lateFactor(task) * multiplier);
 
 // Consecutive finished days ending the day before `day` (same rules as the
 // streak: days without tasks are neutral, an unfinished day breaks it).
@@ -51,7 +74,7 @@ function counted(tasksOfDay: Task[]) {
     .filter((t) => !!t.completedAt)
     .sort(
       (a, b) =>
-        BASE_XP[priorityOf(b)] - BASE_XP[priorityOf(a)] ||
+        BASE_XP[priorityOf(b)] * lateFactor(b) - BASE_XP[priorityOf(a)] * lateFactor(a) ||
         (a.completedAt ?? 0) - (b.completedAt ?? 0)
     )
     .slice(0, DAILY_TASK_CAP);

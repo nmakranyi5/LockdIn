@@ -17,6 +17,9 @@ export type CompletionData = {
   streakMultiplier: number;
   // 1 unless the daily goal was reached; goalReached marks the task that did it.
   goalBonus: number;
+  // Late work earns less: started after its start time / finished after its deadline.
+  lateStart: boolean;
+  lateFinish: boolean;
   goalReached: boolean;
   // Why nothing was earned, when gained is 0.
   note?: string;
@@ -196,6 +199,16 @@ function Content({ data }: { data: CompletionData }) {
                 </Text>
               </View>
             )}
+            {data.lateStart && (
+              <View style={styles.latePill}>
+                <Text style={styles.latePillText}>⏰ −25% started late</Text>
+              </View>
+            )}
+            {data.lateFinish && (
+              <View style={styles.latePill}>
+                <Text style={styles.latePillText}>⏰ −25% finished late</Text>
+              </View>
+            )}
             {data.goalBonus > 1 && (
               <View style={styles.goalPill}>
                 <Text style={styles.goalPillText}>
@@ -293,6 +306,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: colors.accentSoft,
   },
+  latePill: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.dangerSoft,
+  },
+  latePillText: { fontSize: 13, fontWeight: "700", color: colors.danger },
   goalPillText: { fontSize: 13, fontWeight: "700", color: colors.accent },
   goalReached: { marginTop: 6, fontSize: 14, fontWeight: "700", color: colors.accent, textAlign: "center" },
   bonusText: { fontSize: 13, fontWeight: "700", color: colors.streak },

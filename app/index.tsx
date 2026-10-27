@@ -199,14 +199,17 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const onDelete = (id: string, scope: "one" | "all" = "one") => {
     const task = findTask(id);
-    if (!task) return;
+    // Finished tasks stay: they earned XP and are part of the history.
+    if (!task || task.completedAt) return;
 
     if (scope === "all") {
       const key = seriesKey(task);
       tasks
-        .filter((t) => seriesKey(t) === key)
+        .filter((t) => seriesKey(t) === key && !t.completedAt)
         .forEach((t) => cancelTaskNotifications(t));
-      setTasks((prev) => prev.filter((t) => seriesKey(t) !== key));
+      setTasks((prev) =>
+        prev.filter((t) => seriesKey(t) !== key || !!t.completedAt),
+      );
       return;
     }
 
@@ -397,7 +400,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const deleteTask = findTask(deleteId);
   const deleteIsRepeating = !!deleteTask && repeatOf(deleteTask) !== "none";
   const deleteSeriesCount = deleteTask
-    ? tasks.filter((t) => seriesKey(t) === seriesKey(deleteTask)).length
+    ? tasks.filter(
+        (t) => seriesKey(t) === seriesKey(deleteTask) && !t.completedAt,
+      ).length
     : 0;
 
   const {

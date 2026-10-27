@@ -72,14 +72,16 @@ export default function TaskCard({
               {s.status.text}
             </Text>
           </View>
-          <TouchableOpacity
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Delete task"
-            onPress={onDelete}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          {!s.isDone && (
+            <TouchableOpacity
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Delete task"
+              onPress={onDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

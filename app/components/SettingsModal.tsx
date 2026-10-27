@@ -122,13 +122,13 @@ export default function SettingsModal({
         </>
       }
     >
-      {__DEV__ && localOnly && !account && (
+      {localOnly && !account && (
         <View style={styles.devNote}>
           <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
           <Text style={styles.devNoteText}>
-            Supabase is not configured, so there is no sign-in and data stays on this device. Add
-            EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file, then
-            restart with npx expo start -c.
+            {__DEV__
+              ? "Supabase is not configured, so there is no sign-in and data stays on this device. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file, then restart with npx expo start -c."
+              : "This build was made without the backend keys, so there is no sign-in and data stays on this device. Rebuild it with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY set (see supabase/README.md)."}
           </Text>
         </View>
       )}

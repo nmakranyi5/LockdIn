@@ -223,9 +223,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     }
   };
 
+  // Tasks belong to their day: ones planned for a later day can't be worked on yet.
+  const isFuture = (task: Task) => dayKey(new Date(task.startDate)) > todayKey;
+
   const onStartTask = (id: string) => {
     const task = findTask(id);
-    if (!task || task.startedAt) return;
+    if (!task || task.startedAt || isFuture(task)) return;
     cancelTaskNotifications(task, "start", "reminders");
     const startedAt = Date.now();
     updateTask(id, { startedAt });
@@ -238,7 +241,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
     const task = findTask(id);
-    if (!task || task.completedAt) return;
+    if (!task || task.completedAt || isFuture(task)) return;
     // Cancel everything, including a start alert that hasn't fired yet.
     cancelTaskNotifications(task);
     updateTask(id, {
@@ -250,7 +253,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const toggleItem = (id: string, itemId: string) => {
     const task = findTask(id);
-    if (!task || task.completedAt) return;
+    if (!task || task.completedAt || isFuture(task)) return;
     const completesList =
       !task.completedAt &&
       (task.items ?? []).every((i) => (i.id === itemId ? !i.done : i.done)) &&
@@ -753,6 +756,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
               onEnd={() => setFinishing({ id: task.id })}
               onDone={() => setFinishing({ id: task.id })}
               onToggleItem={(itemId) => toggleItem(task.id, itemId)}
+              locked={isFuture(task)}
               onDelete={() => setDeleteId(task.id)}
               xp={dayClosed ? undefined : dayXpInfo.perTask.get(task.id)}
             />

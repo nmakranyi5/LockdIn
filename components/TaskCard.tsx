@@ -24,6 +24,8 @@ type TaskCardProps = {
   onDelete: () => void;
   // XP this task earned (shown once it is completed).
   xp?: number;
+  // A task for a later day: it can be planned but not worked on or finished yet.
+  locked?: boolean;
 };
 
 export default function TaskCard({
@@ -36,6 +38,7 @@ export default function TaskCard({
   onToggleItem,
   onDelete,
   xp,
+  locked,
 }: TaskCardProps) {
   const s = getTaskState(task, now);
   const kind = kindOf(task);
@@ -119,7 +122,7 @@ export default function TaskCard({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.7}
-              disabled={completed}
+              disabled={completed || locked}
               style={styles.itemRow}
               onPress={() => onToggleItem(item.id)}
             >
@@ -153,13 +156,13 @@ export default function TaskCard({
           </Text>
         </View>
 
-        {kind === "timer" && !started && !completed && (
+        {!locked && kind === "timer" && !started && !completed && (
           <ActionButton label="Start" icon="play" bg={colors.accent} onPress={onStart} />
         )}
-        {kind === "timer" && started && !completed && (
+        {!locked && kind === "timer" && started && !completed && (
           <ActionButton label="End" icon="stop" bg={colors.danger} onPress={onEnd} />
         )}
-        {kind === "oneshot" && !completed && (
+        {!locked && kind === "oneshot" && !completed && (
           <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
         )}
       </View>

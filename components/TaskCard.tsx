@@ -166,7 +166,7 @@ export default function TaskCard({
           <ActionButton label="End" icon="stop" bg={colors.danger} onPress={onEnd} />
         )}
         {!locked && !s.isMissed && kind === "oneshot" && !completed && (
-          <ActionButton label="Done" icon="checkmark" bg={colors.success} onPress={onDone} />
+          <ActionButton label="Mark as done" icon="checkmark" bg={colors.success} onPress={onDone} />
         )}
         {s.isMissed && (
           <ActionButton

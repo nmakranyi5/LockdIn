@@ -179,3 +179,20 @@ Besides the emoji, a person can pick a photo (**Profile → the picture tile**).
 square, shrinks it to 128 px and stores it in `profiles.avatar` as a small JPEG data URI (a few KB), so it syncs
 and shows up for friends without any file storage. The column only accepts an emoji (16 characters or fewer)
 or a `data:image/jpeg;base64,` string of at most 24000 characters.
+
+## Hosting the web app on GitHub Pages
+
+The same app runs in a browser, and on an iPhone you can open it in Safari and use Share -> Add to Home Screen
+(it then opens full screen with the app icon). `.github/workflows/pages.yml` builds it and publishes it to
+`https://<user>.github.io/<repo>/` on every push to `master` (or by hand from the Actions tab).
+
+One-time setup:
+1. **Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
+2. **Settings -> Secrets and variables -> Actions -> Variables:** add `EXPO_PUBLIC_SUPABASE_URL` and
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY` (the same two values as in `.env`; the anon key is meant to be public).
+3. **Supabase -> Authentication -> URL Configuration:** set the Site URL to the Pages address and add it under
+   Redirect URLs, so the links in confirmation emails land on the site.
+
+Notes: the web version has no push notifications or task alerts (browsers can't schedule them like the phone
+app), and the data in the browser is stored per site, so sign in to see your tasks. For a local test of the
+Pages build: `EXPO_BASE_URL=/LockdIn npx expo export -p web`.

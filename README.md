@@ -1,50 +1,22 @@
-# Welcome to your Expo app 👋
+# LockdIn
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A daily task app with streaks, XP, friends and a water tracker. Built with Expo (React Native), so it runs on iPhone, Android and the web.
 
-## Get started
+- **Tasks by day:** timers, checklists and one-and-done tasks, with priorities, repeats and an "end of day" deadline. A task can only be done on its own day; missed tasks stay on their day and can be rescheduled.
+- **Streaks and goals:** finish at least N tasks a day (or all of them) to keep your streak.
+- **XP and levels:** more for important tasks, boosted by your streak and goal, less for late work.
+- **Friends:** add people by username, compare streaks, nudge each other.
+- **Water tracker, profile pictures, accounts and sync** through Supabase.
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run it
 
 ```bash
-npm run reset-project
+npm install
+npx expo start        # press i for iOS, a for Android, w for web
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Sign-in and sync need a Supabase project: see [`supabase/README.md`](supabase/README.md) for the SQL to run, the `.env` keys, and how to publish the web app to GitHub Pages.
 
-## Learn more
+## Tests
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The database rules have tests that run in-process: `npm i --no-save @electric-sql/pglite`, then `node supabase/tests/<name>.test.mjs`.

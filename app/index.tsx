@@ -538,6 +538,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     userId,
     profileLoaded && (!social || sync.lastSyncedAt !== null)
   );
+  const streakNow = stats.current;
   const recap = useMemo(
     () =>
       buildRecap({
@@ -546,11 +547,11 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         water,
         waterGoal: profile.waterGoal,
         todayKey,
-        streak: stats.current,
+        streak: streakNow,
         xpForDay: (k) => xp.forDay(k).total,
         goalFor,
       }),
-    [tasks, history, water, profile.waterGoal, todayKey, stats.current, xp, goalFor]
+    [tasks, history, water, profile.waterGoal, todayKey, streakNow, xp, goalFor]
   );
   // The first time the app is opened each day: look back at yesterday.
   const RECAP_KEY = "@lockdin_recap_seen";

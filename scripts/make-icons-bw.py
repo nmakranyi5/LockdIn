@@ -49,7 +49,7 @@ fg.save(os.path.join(IMG, "splash-icon.png"))
 # dark tile (the iOS icon keeps more breathing room, which would shrink it to a speck)
 from PIL import ImageDraw
 F = 256
-box = white.getbbox()
+box = white.point(lambda v: 255 if v > 128 else 0).getbbox()
 lock = Image.new("RGBA", (S, S), (255, 255, 255, 0))
 lock.paste(Image.new("RGBA", (S, S), (255, 255, 255, 255)), (0, 0), white)
 lock = lock.crop(box)

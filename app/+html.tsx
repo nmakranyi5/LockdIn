@@ -36,6 +36,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="LockdIn" />
+        <link rel="icon" type="image/png" sizes="256x256" href={`${base}/favicon-256.png`} />
         <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
         <link rel="manifest" href={`${base}/manifest.webmanifest`} />
         <ScrollViewStyleReset />

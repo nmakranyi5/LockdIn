@@ -45,6 +45,20 @@ fg.save(os.path.join(IMG, "android-icon-monochrome.png"))
 # splash: just the white lock on the splash colour (black)
 fg.save(os.path.join(IMG, "splash-icon.png"))
 
-# favicon
-icon.convert("RGB").resize((48, 48), Image.LANCZOS).save(os.path.join(IMG, "favicon.png"))
+# favicon: tabs are tiny, so the lock is cropped tight and fills most of a rounded
+# dark tile (the iOS icon keeps more breathing room, which would shrink it to a speck)
+from PIL import ImageDraw
+F = 256
+box = white.getbbox()
+lock = Image.new("RGBA", (S, S), (255, 255, 255, 0))
+lock.paste(Image.new("RGBA", (S, S), (255, 255, 255, 255)), (0, 0), white)
+lock = lock.crop(box)
+h = int(F * 0.78)
+lock = lock.resize((int(lock.width * h / lock.height), h), Image.LANCZOS)
+tile = bg.resize((F, F), Image.LANCZOS).convert("RGBA")
+mask = Image.new("L", (F * 4, F * 4), 0)
+ImageDraw.Draw(mask).rounded_rectangle([0, 0, F * 4 - 1, F * 4 - 1], radius=int(F * 4 * 0.22), fill=255)
+tile.putalpha(mask.resize((F, F), Image.LANCZOS))
+tile.alpha_composite(lock, ((F - lock.width) // 2, (F - lock.height) // 2 + int(F * 0.01)))
+tile.save(os.path.join(IMG, "favicon.png"))
 print("done")

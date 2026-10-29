@@ -97,7 +97,7 @@ export default function Index() {
   if (auth.configured && auth.loading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
-  if (auth.configured && !auth.session) return <AuthScreen />;
+  if (auth.configured && !auth.session && !auth.guest) return <AuthScreen />;
   return (
     <Home
       userId={auth.session?.user.id ?? null}
@@ -993,6 +993,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         onClose={() => setIsSettingsModalVisible(false)}
         account={account}
         localOnly={!auth.configured}
+        guest={auth.configured && auth.guest && !userId ? { onSignIn: () => { setIsSettingsModalVisible(false); auth.leaveGuest(); } } : undefined}
       />
 
       {social && (

@@ -26,6 +26,7 @@ export default function HelpHomeScreenModal({
           "Missed a task? Tap Reschedule to copy it to another day.",
           "Log glasses of water on the Water card. It doesn't affect streaks or XP.",
           "Tap the people button to add friends and compare streaks.",
+          "Each morning a recap shows how yesterday went and what's on today. Reopen it from Settings.",
           "Find this again under Settings → Help (top left).",
         ]}
       />

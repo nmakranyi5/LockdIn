@@ -31,6 +31,8 @@ type SettingsModalProps = {
   localOnly?: boolean;
   // Using the app without an account: offer to make one.
   guest?: { onSignIn: () => void };
+  // Look back at yesterday again.
+  onRecap?: () => void;
 };
 
 function ago(ms: number | null) {
@@ -49,6 +51,7 @@ export default function SettingsModal({
   account,
   localOnly,
   guest,
+  onRecap,
 }: SettingsModalProps) {
   const [helpVisible, setHelpVisible] = useState(false);
   const [confirm, setConfirm] = useState<"signOut" | "delete" | null>(null);
@@ -211,6 +214,25 @@ export default function SettingsModal({
             trackColor={{ true: colors.accent, false: colors.surfaceRaised }}
           />
         </View>
+      )}
+
+      {onRecap && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Yesterday's recap"
+          style={[styles.row, styles.rowBottomGap]}
+          onPress={onRecap}
+        >
+          <View style={styles.iconWrap}>
+            <Ionicons name="sunny-outline" size={22} color={colors.accent} />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>Yesterday&apos;s recap</Text>
+            <Text style={styles.rowSub}>How yesterday went, and today at a glance</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
       )}
 
       <TouchableOpacity

@@ -77,7 +77,7 @@ export default function TaskCard({
               {s.status.text}
             </Text>
           </View>
-          {!s.isDone && (
+          {!s.isDone && !s.isMissed && (
             <TouchableOpacity
               hitSlop={10}
               accessibilityRole="button"

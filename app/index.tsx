@@ -210,16 +210,16 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const onDelete = (id: string, scope: "one" | "all" = "one") => {
     const task = findTask(id);
-    // Finished tasks stay: they earned XP and are part of the history.
-    if (!task || task.completedAt) return;
+    // Finished and missed tasks stay: they are part of the record of that day.
+    if (!task || task.completedAt || isMissedTask(task, Date.now())) return;
 
     if (scope === "all") {
       const key = seriesKey(task);
       tasks
-        .filter((t) => seriesKey(t) === key && !t.completedAt)
+        .filter((t) => seriesKey(t) === key && !t.completedAt && !isMissedTask(t, Date.now()))
         .forEach((t) => cancelTaskNotifications(t));
       setTasks((prev) =>
-        prev.filter((t) => seriesKey(t) !== key || !!t.completedAt),
+        prev.filter((t) => seriesKey(t) !== key || !!t.completedAt || isMissedTask(t, Date.now())),
       );
       return;
     }
@@ -419,7 +419,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const deleteIsRepeating = !!deleteTask && repeatOf(deleteTask) !== "none";
   const deleteSeriesCount = deleteTask
     ? tasks.filter(
-        (t) => seriesKey(t) === seriesKey(deleteTask) && !t.completedAt,
+        (t) =>
+          seriesKey(t) === seriesKey(deleteTask) && !t.completedAt && !isMissedTask(t, Date.now()),
       ).length
     : 0;
 

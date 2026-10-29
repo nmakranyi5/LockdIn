@@ -14,8 +14,8 @@ export default function OfflineBanner({ retrying, onRetry }: OfflineBannerProps)
     <View style={styles.banner} accessibilityRole="alert">
       <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
       <View style={styles.text}>
-        <Text style={styles.title}>You're offline</Text>
-        <Text style={styles.sub}>Changes are saved on this device and sync when you're back.</Text>
+        <Text style={styles.title}>You&apos;re offline</Text>
+        <Text style={styles.sub}>Changes are saved on this device and sync when you&apos;re back.</Text>
       </View>
       <TouchableOpacity
         activeOpacity={0.8}

@@ -26,6 +26,7 @@ import LevelUpModal, { useLevelUp } from "../components/LevelUpModal";
 import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import CalendarModal from "../components/CalendarModal";
+import OfflineBanner from "../components/OfflineBanner";
 import WaterCard from "../components/WaterCard";
 import WaterModal from "../components/WaterModal";
 import { glassesOn } from "../components/water";
@@ -758,6 +759,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         showsVerticalScrollIndicator={false}
       >
         {compact && dayHeader}
+        {userId && sync.offline && (
+          <OfflineBanner retrying={sync.status === "syncing"} onRetry={() => sync.syncNow()} />
+        )}
         {isSameDay(selectedDay, today) &&
           dayTasks.length > 0 &&
           stats.today === "complete" && (

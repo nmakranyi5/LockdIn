@@ -8,7 +8,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { isSupabaseConfigured, supabase } from "../sync/client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authStorageKey, isSupabaseConfigured, supabase } from "../sync/client";
 import { friendlyError } from "../sync/errors";
 
 type Result = { error?: string };
@@ -41,13 +42,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth
-      .getSession()
-      .then(({ data }) => setSession(data.session))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => data.subscription.unsubscribe();
+    let alive = true;
+    (async () => {
+      // 1. Open straight away with the session saved on this device. Waiting for
+      //    the network here left the app on a black screen when offline.
+      try {
+        const raw = authStorageKey ? await AsyncStorage.getItem(authStorageKey) : null;
+        const saved = raw ? JSON.parse(raw) : null;
+        if (alive && saved?.user?.id) setSession(saved as Session);
+      } catch {}
+      if (alive) setLoading(false);
+      // 2. Then check it with the server in the background. If that can't be
+      //    reached, keep using the saved session: being offline isn't signing out.
+      try {
+        const { data, error } = await supabase!.auth.getSession();
+        if (!alive) return;
+        if (data.session) setSession(data.session);
+        else if (!error) setSession(null);
+      } catch {}
+    })();
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      // A failed refresh while offline reports "no session"; only a real
+      // sign-out (or the server rejecting the session) should log you out.
+      if (next || event === "SIGNED_OUT") setSession(next);
+    });
+    return () => {
+      alive = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = useCallback<AuthContextValue["signIn"]>(async (email, password) => {

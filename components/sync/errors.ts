@@ -20,3 +20,11 @@ export function friendlyError(e: { message?: string; code?: string } | null | un
     return "Can't reach the server. Check your connection and try again.";
   return msg || "Something went wrong. Please try again.";
 }
+
+// The request never reached the server (no connection, or too slow).
+export function isNetworkError(e: { message?: string; name?: string } | null | undefined) {
+  return (
+    e?.name === "AuthRetryableFetchError" ||
+    /network|failed to fetch|fetch failed|load failed|timed out|offline/i.test(e?.message ?? "")
+  );
+}

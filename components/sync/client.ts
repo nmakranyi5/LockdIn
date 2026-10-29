@@ -17,6 +17,12 @@ if (__DEV__ && !isSupabaseConfigured) {
   );
 }
 
+// Where supabase-js keeps the signed-in session (its default key), so the app can
+// read it straight away without waiting for the network.
+export const authStorageKey = isSupabaseConfigured
+  ? `sb-${new URL(url!).hostname.split(".")[0]}-auth-token`
+  : null;
+
 export const supabase = isSupabaseConfigured
   ? createClient(url!, anonKey!, {
       auth: {
@@ -35,4 +41,21 @@ if (supabase && Platform.OS !== "web") {
     if (state === "active") supabase.auth.startAutoRefresh();
     else supabase.auth.stopAutoRefresh();
   });
+}
+
+// A quick check that the server can be reached at all. Without it, a sync that
+// starts offline sits waiting for the library's own long retries before the app
+// finds out it has no connection.
+export async function canReachServer(timeoutMs = 5000): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch(`${url}/auth/v1/health`, { headers: { apikey: anonKey! }, signal: controller.signal });
+    return true; // any answer, even an error status, means we are online
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }

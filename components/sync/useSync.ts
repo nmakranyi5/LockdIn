@@ -14,7 +14,7 @@ import { Task } from "../taskState";
 import { mergeWater, WaterLog, DEFAULT_WATER_GOAL } from "../water";
 import { XpLedger } from "../xp";
 import { AVATARS, DEFAULT_PROFILE, Profile } from "../useProfile";
-import { supabase } from "./client";
+import { canReachServer, supabase } from "./client";
 import {
   applyRemote,
   isDefaultSchedule,
@@ -30,7 +30,7 @@ import {
   pushTasks,
   pushXp,
 } from "./engine";
-import { friendlyError } from "./errors";
+import { friendlyError, isNetworkError } from "./errors";
 import { historyToRows, syncSig } from "./mapping";
 
 const META_KEY = "@lockdin_sync_meta";
@@ -128,6 +128,8 @@ export function useSync(o: Options) {
   const [status, setStatus] = useState<SyncStatus>(userId ? "idle" : "off");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The last attempt couldn't reach the server (as opposed to the server refusing).
+  const [offline, setOffline] = useState(false);
   const [pending, setPending] = useState(0);
   const [metaLoaded, setMetaLoaded] = useState(false);
   const [accountReady, setAccountReady] = useState(false);
@@ -398,12 +400,15 @@ export function useSync(o: Options) {
     const run = (async () => {
       setStatus("syncing");
       try {
+        if (!(await canReachServer())) throw new Error("Network request failed");
         await doSync(uid);
         setError(null);
+        setOffline(false);
         setStatus("idle");
         setLastSyncedAt(Date.now());
       } catch (e: any) {
         setStatus("error");
+        setOffline(isNetworkError(e));
         setError(friendlyError(e));
       } finally {
         running.current = null;
@@ -502,9 +507,13 @@ export function useSync(o: Options) {
     const poll = setInterval(() => {
       if (AppState.currentState === "active") syncNow();
     }, POLL_MS);
+    // On the web the browser says when the connection is back.
+    const onOnline = () => syncNow();
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", onOnline);
     return () => {
       sub.remove();
       clearInterval(poll);
+      if (typeof window !== "undefined" && window.removeEventListener) window.removeEventListener("online", onOnline);
       if (timer.current) clearTimeout(timer.current);
     };
   }, [accountReady, syncNow]);
@@ -516,5 +525,5 @@ export function useSync(o: Options) {
     setAccountReady(false);
   }, [resetLocal]);
 
-  return { status, lastSyncedAt, error, pending, syncNow, wipeLocal };
+  return { status, lastSyncedAt, error, offline, pending, syncNow, wipeLocal };
 }

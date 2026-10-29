@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import AuthScreen from "../components/auth/AuthScreen";
+import ResetPasswordScreen from "../components/auth/ResetPasswordScreen";
 import { useAuth } from "../components/auth/AuthProvider";
 import CheckInModal from "../components/CheckInModal";
 import CompleteConfirmModal from "../components/CompleteConfirmModal";
@@ -96,6 +97,7 @@ export default function Index() {
   if (auth.configured && auth.loading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
+  if (auth.configured && auth.recovery && auth.session) return <ResetPasswordScreen />;
   if (auth.configured && !auth.session && !auth.guest) return <AuthScreen />;
   return (
     <Home

@@ -63,6 +63,13 @@ For EAS builds, set the same two variables in your EAS environment
   app shows a "Check your email" screen. Turn it off for frictionless sign-up while testing.
 - Password reset emails are sent by Supabase. Point **Authentication → URL Configuration →
   Site URL** at a page you control; the app does not yet handle the reset link itself.
+- **Reset password** needs the links in the email to come back to the app. In **Authentication -> URL
+  Configuration** add these under **Redirect URLs** (and set the **Site URL** to the web address if you host it):
+  - `lockdin://**` for the iPhone/Android app (a development build or TestFlight). In Expo Go the link starts
+    `exp://` instead: add `exp://**` while testing there.
+  - the web address, e.g. `https://<user>.github.io/<repo>/` (and `http://localhost:8081/` for local web).
+  Without these, the email link opens the wrong place. With them, tapping it opens the app on a "New password"
+  screen. A link that has expired or been used says so on the sign-in screen.
 
 ## How syncing works
 

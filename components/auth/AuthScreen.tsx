@@ -37,6 +37,10 @@ export default function AuthScreen() {
 
   const isSignUp = mode === "signUp";
 
+  useEffect(() => {
+    if (auth.linkError) setError(auth.linkError);
+  }, [auth.linkError]);
+
   // Tell people right away whether the username is free.
   useEffect(() => {
     if (!isSignUp) return;

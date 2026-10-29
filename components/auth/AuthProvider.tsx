@@ -9,7 +9,15 @@ import {
   useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { authStorageKey, isSupabaseConfigured, supabase } from "../sync/client";
+import * as Linking from "expo-linking";
+import { Platform } from "react-native";
+import { readAuthParams } from "./linkParams";
+import {
+  authStorageKey,
+  isSupabaseConfigured,
+  startupAuthParams,
+  supabase,
+} from "../sync/client";
 import { friendlyError } from "../sync/errors";
 
 type Result = { error?: string };
@@ -24,6 +32,12 @@ type AuthContextValue = {
   continueAsGuest: () => void;
   // Back to the sign-in screen (e.g. to make an account and back up).
   leaveGuest: () => void;
+  // Arrived from a "reset your password" email: choose a new password now.
+  recovery: boolean;
+  updatePassword: (password: string) => Promise<Result>;
+  cancelRecovery: () => Promise<void>;
+  // An email link that didn't work (expired, already used).
+  linkError: string | null;
   signIn: (email: string, password: string) => Promise<Result>;
   signUp: (
     email: string,
@@ -45,6 +59,8 @@ export const friendlyAuthError = friendlyError;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [guest, setGuest] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   // Stays false without credentials so the static web pre-render matches.
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
@@ -75,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
       // A failed refresh while offline reports "no session"; only a real
       // sign-out (or the server rejecting the session) should log you out.
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
       if (next || event === "SIGNED_OUT") setSession(next);
       if (next) {
         // Signed in: no longer a guest. What was made as a guest is kept and uploaded.
@@ -86,6 +103,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       alive = false;
       data.subscription.unsubscribe();
     };
+  }, []);
+
+  // Links from emails. On the web supabase-js signs the person in from the
+  // address itself; on a phone the link opens the app and we do it here.
+  useEffect(() => {
+    if (!supabase) return;
+    const handle = async (params: Record<string, string>, native: boolean) => {
+      if (params.error_description || params.error) {
+        const expired = /expired|invalid/i.test(`${params.error_description ?? ""} ${params.error_code ?? ""}`);
+        setLinkError(
+          expired
+            ? "That link has expired or was already used. Request a new one."
+            : params.error_description || "That link didn't work. Request a new one."
+        );
+        return;
+      }
+      if (params.type === "recovery" && params.access_token) {
+        if (native && params.refresh_token) {
+          const { error } = await supabase!.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+          if (error) return setLinkError("That link has expired or was already used. Request a new one.");
+        }
+        setRecovery(true);
+      }
+    };
+    if (Platform.OS === "web") {
+      handle(startupAuthParams, false);
+      return;
+    }
+    Linking.getInitialURL()
+      .then((u) => {
+        if (u) handle(readAuthParams(u), true);
+      })
+      .catch(() => {});
+    const sub = Linking.addEventListener("url", ({ url }) => handle(readAuthParams(url), true));
+    return () => sub.remove();
+  }, []);
+
+  const updatePassword = useCallback<AuthContextValue["updatePassword"]>(async (password) => {
+    const { error } = await supabase!.auth.updateUser({ password });
+    if (error) return { error: friendlyAuthError(error) };
+    setRecovery(false);
+    return {};
+  }, []);
+
+  const cancelRecovery = useCallback(async () => {
+    setRecovery(false);
+    await supabase?.auth.signOut();
   }, []);
 
   const continueAsGuest = useCallback(() => {
@@ -121,7 +188,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetPassword = useCallback<AuthContextValue["resetPassword"]>(async (email) => {
-    const { error } = await supabase!.auth.resetPasswordForEmail(email.trim());
+    // The link in the email brings the person back here: the site itself on the
+    // web, the app (lockdin://) on a phone. Supabase must list it as a redirect URL.
+    const redirectTo =
+      Platform.OS === "web" && typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}`
+        : Linking.createURL("/");
+    const { error } = await supabase!.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     return error ? { error: friendlyAuthError(error) } : {};
   }, []);
 
@@ -145,6 +218,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       guest,
       continueAsGuest,
       leaveGuest,
+      recovery,
+      updatePassword,
+      cancelRecovery,
+      linkError,
       signIn,
       signUp,
       signOut,
@@ -152,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendConfirmation,
       deleteAccount,
     }),
-    [loading, session, guest, continueAsGuest, leaveGuest, signIn, signUp, signOut, resetPassword, resendConfirmation, deleteAccount]
+    [loading, session, guest, continueAsGuest, leaveGuest, recovery, updatePassword, cancelRecovery, linkError, signIn, signUp, signOut, resetPassword, resendConfirmation, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,130 +1,51 @@
+import { Platform } from "react-native";
 import * as Notifications from "./notifications";
-import { kindOf, Task } from "./taskState";
+import { planNotifications, withinBudget } from "./notificationPlan";
+import { Task } from "./taskState";
 
-type Schedulable = Pick<Task, "title" | "startDate" | "endDate" | "kind">;
+export { normalizeWindow } from "./notificationPlan";
 
-// Follow-up nudges after the start time for a timer task that hasn't been
-// started. Finite on purpose: they stop at the deadline.
-const REMINDER_OFFSETS_MIN = [5, 15, 30, 60];
+// iOS keeps only the 64 soonest-firing local notifications and silently drops
+// the rest, so the plan is trimmed to the soonest ones and topped up whenever
+// the app is opened. Android has no such small limit.
+const BUDGET = Platform.OS === "ios" ? 60 : 300;
 
-// A trigger date must be comfortably in the future to be schedulable.
-const isFuture = (d: Date) => d.getTime() > Date.now() + 2000;
+let chain: Promise<void> = Promise.resolve();
 
-const at = (title: string, body: string, date: Date) =>
-  Notifications.scheduleNotificationAsync({
-    content: { title, body },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date,
-    },
-  });
-
-// Schedules the start / follow-up / deadline notifications. Dates are never
-// moved: anything whose time has already passed is simply not scheduled.
-// Pass `started` for tasks that are already running so start alerts are skipped.
-export async function scheduleTaskNotifications(
-  task: Schedulable,
-  started = false
-) {
-  const startDate = new Date(task.startDate);
-  startDate.setSeconds(0, 0);
-  let endDate = new Date(task.endDate);
-  endDate.setSeconds(0, 0);
-  if (endDate.getTime() <= startDate.getTime()) {
-    endDate = new Date(startDate.getTime() + 60_000);
-  }
-
-  const ids: Pick<
-    Task,
-    "startNotificationId" | "deadlineNotificationId" | "reminderNotificationIds"
-  > = {};
-
-  if (!started) {
-    if (isFuture(startDate)) {
-      ids.startNotificationId = await at(
-        "Time to start task!",
-        task.title,
-        startDate
-      );
-    }
-
-    // Only timer tasks have a "start" action to nudge about.
-    if (kindOf(task as Task) === "timer") {
-      const reminders: string[] = [];
-      for (const minutes of REMINDER_OFFSETS_MIN) {
-        const when = new Date(startDate.getTime() + minutes * 60_000);
-        if (isFuture(when) && when.getTime() < endDate.getTime()) {
-          reminders.push(
-            await at(
-              "Hey! Start your task!",
-              `You are overdue to start: ${task.title}`,
-              when
-            )
-          );
-        }
-      }
-      if (reminders.length) ids.reminderNotificationIds = reminders;
-    }
-  }
-
-  if (isFuture(endDate)) {
-    ids.deadlineNotificationId = await at(
-      "Task deadline reached!",
-      task.title,
-      endDate
-    );
-  }
-
-  return { startDate, endDate, ...ids };
+// Makes the phone's pending notifications match the tasks: schedules what is
+// missing or changed, and cancels what is no longer wanted (finished, started,
+// deleted, edited, or left over from an older version of the app). Safe to call
+// as often as needed; calls run one after another.
+export function syncNotifications(tasks: Task[]): Promise<void> {
+  chain = chain
+    .then(() => run(tasks))
+    .catch((e) => console.log("Could not update notifications", e));
+  return chain;
 }
 
-// When a running timer task passes its estimate: one nudge right at the
-// estimate, then a few follow-ups in case the person forgot to stop it.
-const CHECK_IN_OFFSETS_MIN = [0, 15, 30, 60];
+async function run(tasks: Task[]) {
+  const want = new Map(withinBudget(planNotifications(tasks), BUDGET).map((p) => [p.id, p]));
+  const existing = await Notifications.getAllScheduledNotificationsAsync();
+  const have = new Map(existing.map((n) => [n.identifier, n]));
 
-export async function scheduleCheckInNotifications(
-  task: Pick<Task, "title" | "estimateMinutes">,
-  startedAt: number
-) {
-  if (!task.estimateMinutes) return undefined;
-  const ids: string[] = [];
-  for (const offset of CHECK_IN_OFFSETS_MIN) {
-    const when = new Date(startedAt + (task.estimateMinutes + offset) * 60_000);
-    if (!isFuture(when)) continue;
-    ids.push(
-      await at(
-        offset === 0 ? "Your estimate is up" : "Still working?",
-        offset === 0
-          ? `"${task.title}": time's up on your estimate. Still working, or did you forget to stop the timer?`
-          : `"${task.title}" is ${offset} min over your estimate. Still on it?`,
-        when
-      )
-    );
+  for (const [id] of have) {
+    if (!want.has(id)) await Notifications.cancelScheduledNotificationAsync(id);
   }
-  return ids.length ? ids : undefined;
-}
-
-// Used when a finished task is reopened.
-export async function scheduleDeadlineNotification(task: Task) {
-  const end = new Date(task.endDate);
-  end.setSeconds(0, 0);
-  return isFuture(end)
-    ? at("Task deadline reached!", task.title, end)
-    : undefined;
-}
-
-type Kind = "start" | "deadline" | "reminders" | "checkins";
-
-export function cancelTaskNotifications(task: Task | undefined, ...which: Kind[]) {
-  if (!task) return;
-  const kinds = which.length ? which : (["start", "deadline", "reminders", "checkins"] as Kind[]);
-  const ids: (string | undefined)[] = [];
-  if (kinds.includes("start")) ids.push(task.startNotificationId);
-  if (kinds.includes("deadline")) ids.push(task.deadlineNotificationId);
-  if (kinds.includes("reminders")) {
-    // reminderNotificationId is the old single repeating reminder.
-    ids.push(task.reminderNotificationId, ...(task.reminderNotificationIds ?? []));
+  for (const p of want.values()) {
+    const n = have.get(p.id);
+    const same =
+      !!n &&
+      n.content.title === p.title &&
+      n.content.body === p.body &&
+      (n.content.data as { at?: number } | undefined)?.at === p.date.getTime();
+    if (same) continue;
+    await Notifications.scheduleNotificationAsync({
+      identifier: p.id,
+      content: { title: p.title, body: p.body, data: { at: p.date.getTime() } },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: p.date,
+      },
+    });
   }
-  if (kinds.includes("checkins")) ids.push(...(task.checkInNotificationIds ?? []));
-  ids.forEach((id) => id && Notifications.cancelScheduledNotificationAsync(id));
 }

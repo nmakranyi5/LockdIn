@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius } from "../assets/colors/colors";
 import AuthScreen from "../components/auth/AuthScreen";
+import ResetPasswordScreen from "../components/auth/ResetPasswordScreen";
 import { useAuth } from "../components/auth/AuthProvider";
 import CheckInModal from "../components/CheckInModal";
 import CompleteConfirmModal from "../components/CompleteConfirmModal";
@@ -38,11 +40,7 @@ import { BASE_XP, DAILY_TASK_CAP, lateness, levelFromXp, XpSummary } from "../co
 import { useSync } from "../components/sync/useSync";
 import { useProfile } from "../components/useProfile";
 import * as Notifications from "../components/notifications";
-import {
-  cancelTaskNotifications,
-  scheduleCheckInNotifications,
-  scheduleTaskNotifications,
-} from "../components/scheduleTask";
+import { normalizeWindow, syncNotifications } from "../components/scheduleTask";
 import TaskCard from "../components/TaskCard";
 import { priorityRank } from "../components/taskMeta";
 import {
@@ -99,6 +97,7 @@ export default function Index() {
   if (auth.configured && auth.loading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
+  if (auth.configured && auth.recovery && auth.session) return <ResetPasswordScreen />;
   if (auth.configured && !auth.session && !auth.guest) return <AuthScreen />;
   return (
     <Home
@@ -151,36 +150,24 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
   const handleSaveTask = async (input: TaskInput) => {
     const old = findTask(editingId);
-    if (old) cancelTaskNotifications(old);
 
     // A task that is mid-run keeps running when it is edited; a finished one
     // is being rescheduled and starts fresh.
     const keepRunning = !!old && !!old.startedAt && !old.completedAt;
-    const sched = await scheduleTaskNotifications(input, keepRunning);
+    const window = normalizeWindow(input);
     const estimateMinutes =
       input.kind === "timer" ? input.estimateMinutes : undefined;
-    // A running task keeps its start, so line its check-ins up with the
-    // (possibly new) estimate.
-    const checkIns =
-      keepRunning && estimateMinutes && old?.startedAt
-        ? await scheduleCheckInNotifications({ title: input.title, estimateMinutes }, old.startedAt)
-        : undefined;
 
     const fields = {
       title: input.title,
-      startDate: sched.startDate,
-      endDate: sched.endDate,
+      startDate: window.startDate,
+      endDate: window.endDate,
       repeats: input.repeats,
       kind: input.kind,
       priority: input.priority,
       items: input.items,
       estimateMinutes,
-      checkInNotificationIds: checkIns,
       nextCheckInAt: undefined,
-      startNotificationId: sched.startNotificationId,
-      deadlineNotificationId: sched.deadlineNotificationId,
-      reminderNotificationId: undefined,
-      reminderNotificationIds: sched.reminderNotificationIds,
     };
 
     if (old) {
@@ -202,7 +189,7 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         },
       ]);
     }
-    setSelectedDay(startOfDay(sched.startDate));
+    setSelectedDay(startOfDay(window.startDate));
   };
 
   const onEdit = (id: string) => {
@@ -220,16 +207,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
 
     if (scope === "all") {
       const key = seriesKey(task);
-      tasks
-        .filter((t) => seriesKey(t) === key && !t.completedAt && !isMissedTask(t, Date.now()))
-        .forEach((t) => cancelTaskNotifications(t));
       setTasks((prev) =>
         prev.filter((t) => seriesKey(t) !== key || !!t.completedAt || isMissedTask(t, Date.now())),
       );
       return;
     }
 
-    cancelTaskNotifications(task);
     if (repeatOf(task) !== "none" && !task.spawnedNext) {
       // Keep the series going: line up the next occurrence as this one goes.
       spawnNext(task, true);
@@ -254,21 +237,12 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const onStartTask = (id: string) => {
     const task = findTask(id);
     if (!task || task.startedAt || isLockedTask(task)) return;
-    cancelTaskNotifications(task, "start", "reminders");
-    const startedAt = Date.now();
-    updateTask(id, { startedAt });
-    if (task.estimateMinutes) {
-      scheduleCheckInNotifications(task, startedAt).then((ids) =>
-        updateTask(id, { checkInNotificationIds: ids })
-      );
-    }
+    updateTask(id, { startedAt: Date.now() });
   };
 
   const completeTask = (id: string, patch: Partial<Task> = {}) => {
     const task = findTask(id);
     if (!task || task.completedAt || isLockedTask(task)) return;
-    // Cancel everything, including a start alert that hasn't fired yet.
-    cancelTaskNotifications(task);
     updateTask(id, {
       ...patch,
       completedAt: Date.now(),
@@ -343,6 +317,27 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }, [tasks, loaded]);
 
+  // Keep the phone's reminders in line with the tasks: whenever they change,
+  // and again whenever the app is opened, since iOS only holds the soonest 64.
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => syncNotifications(tasks), 400);
+    return () => clearTimeout(t);
+  }, [tasks, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") syncNotifications(tasksRef.current);
+    });
+    const every = setInterval(() => syncNotifications(tasksRef.current), 10 * 60_000);
+    return () => {
+      sub.remove();
+      clearInterval(every);
+    };
+  }, [loaded]);
+
   const spawnNext = async (task: Task, removeSource = false) => {
     spawning.current.add(task.id);
     const occurrence = nextOccurrence(task, Date.now());
@@ -351,32 +346,24 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
       else updateTask(task.id, { spawnedNext: true });
       return;
     }
-    const sched = await scheduleTaskNotifications({ ...task, ...occurrence });
+    const window = normalizeWindow({ ...task, ...occurrence });
     const next: Task = {
       ...task,
       // Deterministic so two devices spawning the same occurrence agree on it
       // instead of creating duplicates.
-      id: `${seriesKey(task)}@${sched.startDate.getTime()}`,
+      id: `${seriesKey(task)}@${window.startDate.getTime()}`,
       seriesId: seriesKey(task),
-      startDate: sched.startDate,
-      endDate: sched.endDate,
-      startNotificationId: sched.startNotificationId,
-      deadlineNotificationId: sched.deadlineNotificationId,
-      reminderNotificationId: undefined,
-      reminderNotificationIds: sched.reminderNotificationIds,
+      startDate: window.startDate,
+      endDate: window.endDate,
       startedAt: null,
       completedAt: null,
       spawnedNext: false,
-      checkInNotificationIds: undefined,
       nextCheckInAt: undefined,
       items: task.items?.map((i) => ({ ...i, done: false })),
     };
     setTasks((prev) => {
       // The source task may have been deleted while this was scheduling.
-      if (!prev.some((t) => t.id === task.id)) {
-        cancelTaskNotifications(next);
-        return prev;
-      }
+      if (!prev.some((t) => t.id === task.id)) return prev;
       return [
         ...(removeSource
           ? prev.filter((t) => t.id !== task.id)

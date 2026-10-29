@@ -17,6 +17,12 @@ export async function scheduleNotificationAsync(_request: unknown) {
 
 export async function cancelScheduledNotificationAsync(_id: string) {}
 
+export async function getAllScheduledNotificationsAsync(): Promise<
+  { identifier: string; content: { title?: string | null; body?: string | null; data?: unknown } }[]
+> {
+  return [];
+}
+
 export const AndroidImportance = { MAX: 5 } as const;
 
 export async function setNotificationChannelAsync(_id: string, _channel: unknown) {}

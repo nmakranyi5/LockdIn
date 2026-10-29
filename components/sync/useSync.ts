@@ -8,7 +8,6 @@ import {
   useState,
 } from "react";
 import { AppState } from "react-native";
-import { cancelTaskNotifications, scheduleCheckInNotifications, scheduleTaskNotifications } from "../scheduleTask";
 import { History } from "../streak";
 import { Task } from "../taskState";
 import { mergeWater, WaterLog, DEFAULT_WATER_GOAL } from "../water";
@@ -189,7 +188,6 @@ export function useSync(o: Options) {
   // different account signs in on this device).
   const resetLocal = useCallback(
     (nextUserId: string | null) => {
-      tasksRef.current.forEach((t) => cancelTaskNotifications(t));
       // Reset the bookkeeping first so clearing the lists isn't mistaken for
       // the user deleting everything.
       metaRef.current = emptyMeta(nextUserId);
@@ -348,45 +346,6 @@ export function useSync(o: Options) {
         for (const d of toPush) m.waterSynced[d] = merged[d].at;
       }
       persist();
-    }
-
-    // 7. line this device's local notifications up with what changed
-    try {
-      preview.removed.forEach((t) => cancelTaskNotifications(t));
-      const updates = new Map<string, Partial<Task>>();
-      for (const { task, previous } of preview.upserted) {
-        if (previous) cancelTaskNotifications(previous);
-        const cleared: Partial<Task> = {
-          startNotificationId: undefined,
-          deadlineNotificationId: undefined,
-          reminderNotificationId: undefined,
-          reminderNotificationIds: undefined,
-          checkInNotificationIds: undefined,
-          nextCheckInAt: undefined,
-        };
-        if (task.completedAt) {
-          updates.set(task.id, cleared);
-          continue;
-        }
-        const started = !!task.startedAt;
-        const sched = await scheduleTaskNotifications(task, started);
-        const checkIns =
-          started && task.estimateMinutes
-            ? await scheduleCheckInNotifications(task, task.startedAt!)
-            : undefined;
-        updates.set(task.id, {
-          ...cleared,
-          startNotificationId: sched.startNotificationId,
-          deadlineNotificationId: sched.deadlineNotificationId,
-          reminderNotificationIds: sched.reminderNotificationIds,
-          checkInNotificationIds: checkIns,
-        });
-      }
-      if (updates.size) {
-        setTasks((prev) => prev.map((t) => (updates.has(t.id) ? { ...t, ...updates.get(t.id) } : t)));
-      }
-    } catch (e) {
-      console.log("Could not update local notifications after sync", e);
     }
   }, [setTasks, setHistory, setXpLedger, setWater, setProfile]);
 

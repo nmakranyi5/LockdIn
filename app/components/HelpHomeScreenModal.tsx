@@ -21,6 +21,7 @@ export default function HelpHomeScreenModal({
         items={[
           "Switch days with the strip. Tap a task to edit it, or the bin to delete it.",
           "Tap + to add a task. You can plan ahead, but each task can only be done on its own day.",
+          "You get reminders 1 hour, 30, 15 and 5 minutes before a task, then every 2 minutes after its start time until you begin.",
           "Finish at least one task a day to grow your 🔥 streak. Set your daily goal on your profile (top right).",
           "Finishing a task earns XP: more for urgent ones, boosted by your streak and goal. Late starts and finishes cost 25%.",
           "Missed a task? Tap Reschedule to copy it to another day.",

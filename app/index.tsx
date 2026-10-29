@@ -27,6 +27,8 @@ import ProfileModal from "../components/ProfileModal";
 import ProfileBubble from "../components/ProfileBubble";
 import CalendarModal from "../components/CalendarModal";
 import OfflineBanner from "../components/OfflineBanner";
+import RecapModal from "../components/RecapModal";
+import { buildRecap } from "../components/recap";
 import WaterCard from "../components/WaterCard";
 import WaterModal from "../components/WaterModal";
 import { glassesOn } from "../components/water";
@@ -119,6 +121,9 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
   const [editingId, setEditingId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [waterOpen, setWaterOpen] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false);
+  // Waited long enough for the first sync, so yesterday's data is complete.
+  const [recapWaited, setRecapWaited] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   // A task the person has said they finished, awaiting confirmation. `itemId`
@@ -533,6 +538,44 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
     userId,
     profileLoaded && (!social || sync.lastSyncedAt !== null)
   );
+  const recap = useMemo(
+    () =>
+      buildRecap({
+        tasks,
+        history,
+        water,
+        waterGoal: profile.waterGoal,
+        todayKey,
+        streak: stats.current,
+        xpForDay: (k) => xp.forDay(k).total,
+        goalFor,
+      }),
+    [tasks, history, water, profile.waterGoal, todayKey, stats.current, xp, goalFor]
+  );
+  // The first time the app is opened each day: look back at yesterday.
+  const RECAP_KEY = "@lockdin_recap_seen";
+  useEffect(() => {
+    const t = setTimeout(() => setRecapWaited(true), 3500);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!loaded || !profileLoaded || anyModalOpen || recapOpen || levelUp.celebrate !== null) return;
+    if (social && sync.lastSyncedAt === null && !recapWaited) return;
+    let cancelled = false;
+    (async () => {
+      let seen: string | null = null;
+      try {
+        seen = await AsyncStorage.getItem(RECAP_KEY);
+      } catch {}
+      if (cancelled || seen === todayKey) return;
+      // Someone brand new, or a quiet day, has nothing to look back on: just note the day.
+      AsyncStorage.setItem(RECAP_KEY, todayKey).catch(() => {});
+      if (seen !== null && recap.hasContent) setRecapOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, profileLoaded, anyModalOpen, recapOpen, levelUp.celebrate, social, sync.lastSyncedAt, recapWaited, todayKey, recap.hasContent]);
   const todayGoal = goalFor(todayKey);
   const todayTasks = tasks.filter((t) => dayKey(new Date(t.startDate)) === todayKey);
   const goalProgress = {
@@ -862,6 +905,8 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         onClose={() => setWaterOpen(false)}
       />
 
+      <RecapModal visible={recapOpen} recap={recap} onClose={() => setRecapOpen(false)} />
+
       <CalendarModal
         visible={calendarOpen}
         selected={selectedDay}
@@ -994,6 +1039,10 @@ function Home({ userId, email }: { userId: string | null; email: string | null }
         onClose={() => setIsSettingsModalVisible(false)}
         account={account}
         localOnly={!auth.configured}
+        onRecap={() => {
+          setIsSettingsModalVisible(false);
+          setRecapOpen(true);
+        }}
         guest={auth.configured && auth.guest && !userId ? { onSignIn: () => { setIsSettingsModalVisible(false); auth.leaveGuest(); } } : undefined}
       />
 

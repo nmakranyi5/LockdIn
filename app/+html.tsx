@@ -5,6 +5,22 @@ import type { PropsWithChildren } from "react";
 // be added to an iPhone's home screen and open full screen like an app.
 const base = process.env.EXPO_BASE_URL ?? "";
 
+// The browser paints autofilled inputs bright yellow with black text. Keep them
+// in the app's dark field colour and white text, so they look like the rest.
+const css = `
+html{color-scheme:dark}
+body{background-color:#0B0B0F}
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active{
+  -webkit-text-fill-color:#fff !important;
+  caret-color:#fff;
+  -webkit-box-shadow:0 0 0 1000px #1C1C24 inset !important;
+  box-shadow:0 0 0 1000px #1C1C24 inset !important;
+  transition:background-color 99999s ease-out 0s;
+}`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="en">
@@ -23,7 +39,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href={`${base}/apple-touch-icon.png`} />
         <link rel="manifest" href={`${base}/manifest.webmanifest`} />
         <ScrollViewStyleReset />
-        <style dangerouslySetInnerHTML={{ __html: "body{background-color:#0B0B0F}" }} />
+        <style dangerouslySetInnerHTML={{ __html: css }} />
       </head>
       <body>{children}</body>
     </html>

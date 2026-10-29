@@ -19,6 +19,11 @@ type AuthContextValue = {
   configured: boolean;
   loading: boolean;
   session: Session | null;
+  // Using the app without an account: everything stays on this device.
+  guest: boolean;
+  continueAsGuest: () => void;
+  // Back to the sign-in screen (e.g. to make an account and back up).
+  leaveGuest: () => void;
   signIn: (email: string, password: string) => Promise<Result>;
   signUp: (
     email: string,
@@ -31,12 +36,15 @@ type AuthContextValue = {
   deleteAccount: () => Promise<Result>;
 };
 
+const GUEST_KEY = "@lockdin_guest";
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const friendlyAuthError = friendlyError;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [guest, setGuest] = useState(false);
   // Stays false without credentials so the static web pre-render matches.
   const [loading, setLoading] = useState(isSupabaseConfigured);
 
@@ -46,6 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       // 1. Open straight away with the session saved on this device. Waiting for
       //    the network here left the app on a black screen when offline.
+      try {
+        if ((await AsyncStorage.getItem(GUEST_KEY)) === "true" && alive) setGuest(true);
+      } catch {}
       try {
         const raw = authStorageKey ? await AsyncStorage.getItem(authStorageKey) : null;
         const saved = raw ? JSON.parse(raw) : null;
@@ -65,11 +76,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A failed refresh while offline reports "no session"; only a real
       // sign-out (or the server rejecting the session) should log you out.
       if (next || event === "SIGNED_OUT") setSession(next);
+      if (next) {
+        // Signed in: no longer a guest. What was made as a guest is kept and uploaded.
+        setGuest(false);
+        AsyncStorage.removeItem(GUEST_KEY).catch(() => {});
+      }
     });
     return () => {
       alive = false;
       data.subscription.unsubscribe();
     };
+  }, []);
+
+  const continueAsGuest = useCallback(() => {
+    setGuest(true);
+    AsyncStorage.setItem(GUEST_KEY, "true").catch(() => {});
+  }, []);
+
+  const leaveGuest = useCallback(() => {
+    setGuest(false);
+    AsyncStorage.removeItem(GUEST_KEY).catch(() => {});
   }, []);
 
   const signIn = useCallback<AuthContextValue["signIn"]>(async (email, password) => {
@@ -116,6 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configured: isSupabaseConfigured,
       loading,
       session,
+      guest,
+      continueAsGuest,
+      leaveGuest,
       signIn,
       signUp,
       signOut,
@@ -123,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resendConfirmation,
       deleteAccount,
     }),
-    [loading, session, signIn, signUp, signOut, resetPassword, resendConfirmation, deleteAccount]
+    [loading, session, guest, continueAsGuest, leaveGuest, signIn, signUp, signOut, resetPassword, resendConfirmation, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -290,6 +290,22 @@ export default function AuthScreen() {
                 </Text>
               </TouchableOpacity>
             )}
+
+            {!confirming && (
+              <View style={styles.guest}>
+                <TouchableOpacity
+                  onPress={auth.continueAsGuest}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue without an account"
+                  style={styles.guestButton}
+                >
+                  <Text style={styles.guestText}>Continue without an account</Text>
+                </TouchableOpacity>
+                <Text style={styles.guestNote}>
+                  Your tasks stay on this device. Make an account any time to back them up.
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -361,6 +377,18 @@ const styles = StyleSheet.create({
   submit: { marginTop: 16 },
   link: { alignSelf: "center", paddingVertical: 12 },
   linkText: { fontSize: 14, fontWeight: "600", color: colors.accent },
+  guest: { alignItems: "center", marginTop: 14, gap: 6 },
+  guestButton: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingVertical: 13,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  guestText: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+  guestNote: { fontSize: 13, lineHeight: 18, textAlign: "center", color: colors.textMuted },
   switch: { marginTop: 18, paddingVertical: 8 },
   switchText: { fontSize: 15, color: colors.textMuted },
   switchStrong: { color: colors.accent, fontWeight: "700" },

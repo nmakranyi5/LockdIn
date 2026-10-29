@@ -31,9 +31,14 @@ export function useLevelUp(level: number, userId: string | null, enabled: boolea
       if (cancelled) return;
       const remember = () =>
         AsyncStorage.setItem(SEEN_KEY, JSON.stringify({ userId, level })).catch(() => {});
-      if (!seen || seen.userId !== userId || level < seen.level) {
-        // First run for this account (or progress went down): start quietly.
+      if (!seen || seen.userId !== userId) {
+        // First run for this account: start quietly.
         remember();
+        setCelebrate(null);
+      } else if (level < seen.level) {
+        // Progress is empty for a moment (e.g. while signing out wipes this
+        // device's copy). Don't forget the level already celebrated, or it
+        // would be celebrated again when the account's progress comes back.
         setCelebrate(null);
       } else if (level > seen.level && level > claimed.current) {
         setCelebrate(level);

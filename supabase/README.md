@@ -50,7 +50,9 @@ Take both values from **Project Settings → API**. Use the **anon / public** ke
 `service_role` key. Put real values in `.env`, not in any tracked file such as `.env.example`.
 Restart Expo (`npx expo start -c`) after changing them.
 
-Without these the app runs local-only (no sign-in screen), as it did before.
+Without these the app runs local-only (no sign-in screen), as it did before. With them, the sign-in screen also
+has **Continue without an account**: the app then works fully on the device (no sync, no friends), and Settings
+offers to make an account later, which uploads everything made so far.
 
 For EAS builds, set the same two variables in your EAS environment
 (`eas env:create` or the expo.dev dashboard); `.env` is not uploaded.

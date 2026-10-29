@@ -29,6 +29,8 @@ type SettingsModalProps = {
   account?: AccountInfo;
   // Developer hint: no Supabase keys were found, so there is no sign-in.
   localOnly?: boolean;
+  // Using the app without an account: offer to make one.
+  guest?: { onSignIn: () => void };
 };
 
 function ago(ms: number | null) {
@@ -46,6 +48,7 @@ export default function SettingsModal({
   onClose,
   account,
   localOnly,
+  guest,
 }: SettingsModalProps) {
   const [helpVisible, setHelpVisible] = useState(false);
   const [confirm, setConfirm] = useState<"signOut" | "delete" | null>(null);
@@ -130,6 +133,23 @@ export default function SettingsModal({
               ? "Supabase is not configured, so there is no sign-in and data stays on this device. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file, then restart with npx expo start -c."
               : "This build was made without the backend keys, so there is no sign-in and data stays on this device. Rebuild it with EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY set (see supabase/README.md)."}
           </Text>
+        </View>
+      )}
+
+      {guest && (
+        <View style={styles.account}>
+          <View style={styles.accountTop}>
+            <View style={styles.iconWrap}>
+              <Ionicons name="cloud-upload-outline" size={20} color={colors.accent} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.email}>No account</Text>
+              <Text style={styles.rowSub}>
+                Your data is only on this device. Make an account to back it up, sync it between devices and add friends.
+              </Text>
+            </View>
+          </View>
+          <Button label="Sign in or create an account" onPress={guest.onSignIn} />
         </View>
       )}
 
